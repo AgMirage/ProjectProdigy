@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "item_reroll_ticket.pdf",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
