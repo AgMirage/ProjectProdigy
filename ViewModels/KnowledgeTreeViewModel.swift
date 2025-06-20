@@ -5,128 +5,164 @@ import SwiftUI
 class KnowledgeTreeViewModel: ObservableObject {
     
     // MARK: - Published Properties
-    @Published var fullTree: [Subject] = []
-    @Published var selectedSubject: Subject?
-    @Published var levelFilter: BranchLevel? = nil
+    @Published var subjects: [Subject] = []
+    @Published var branchesToDisplay: [KnowledgeBranch] = []
     
-    // --- NEW: This will trigger the mastery goal sheet to appear ---
-    @Published var branchToSetMastery: KnowledgeBranch?
-    
-    // --- FIXED: 'private' removed to make it accessible to the View layer ---
-    var player: Player?
-    
-    // A weak reference to the MainViewModel to update the player object
-    private weak var mainViewModel: MainViewModel?
-    
-    var filteredBranches: [KnowledgeBranch] {
-        guard let subject = selectedSubject else { return [] }
-        if let filter = levelFilter {
-            return subject.branches.filter { $0.level == filter }
-        } else {
-            return subject.branches
+    @Published var selectedSubject: Subject? {
+        didSet {
+            updateDisplayedBranches()
         }
     }
-
-    // MARK: - Initialization & Re-initialization
-    init() {
-        // This initializer is used by the preview.
-        self.fullTree = []
+    @Published var levelFilter: BranchLevel? = nil {
+        didSet {
+            updateDisplayedBranches()
+        }
     }
+    @Published var branchToSetMastery: KnowledgeBranch?
     
-    // This is the primary initializer used by the main app view.
+    // --- Re-introducing refreshID to force UI updates reliably ---
+    @Published var refreshID = UUID()
+    
+    private var fullTree: [Subject] = []
+    var player: Player?
+    private weak var mainViewModel: MainViewModel?
+
+    // MARK: - Initialization
+    init() { }
+    
     func reinitialize(with mainViewModel: MainViewModel) {
         self.mainViewModel = mainViewModel
         self.player = mainViewModel.player
         self.fullTree = KnowledgeTreeFactory.createFullTree()
-        
         self.unlockInitialNodes()
-        self.checkForAllBranchUnlocks()
-        
+        self.subjects = self.fullTree
         if self.selectedSubject == nil {
             self.selectedSubject = self.fullTree.first
         }
+        updateDisplayedBranches()
     }
     
-    // MARK: - Public Methods
+    // MARK: - Core Logic
     
-    func selectSubject(_ subject: Subject) {
-        self.selectedSubject = subject
+    private func updateDisplayedBranches() {
+        guard let selectedSubject = selectedSubject,
+              let subjectFromTree = fullTree.first(where: { $0.id == selectedSubject.id })
+        else {
+            branchesToDisplay = []
+            return
+        }
+
+        if let filter = levelFilter {
+            branchesToDisplay = subjectFromTree.branches.filter { $0.level == filter }
+        } else {
+            branchesToDisplay = subjectFromTree.branches
+        }
     }
     
-    /// Adds progress from a completed mission to the relevant branch and checks for unlocks.
     func addProgress(to branchName: String, in subjectName: String, xp: Double, time: TimeInterval) {
         guard var player = self.player, let mainVM = self.mainViewModel else { return }
         
-        guard let subjectIndex = fullTree.firstIndex(where: { $0.name == subjectName }),
-              let branchIndex = fullTree[subjectIndex].branches.firstIndex(where: { $0.name == branchName }) else {
-            print("Error: Could not find branch '\(branchName)' in subject '\(subjectName)' to add progress.")
+        guard let sIndex = fullTree.firstIndex(where: { $0.name == subjectName }),
+              let bIndex = fullTree[sIndex].branches.firstIndex(where: { $0.name == branchName }) else {
             return
         }
         
-        // Add progress to the specific branch
-        fullTree[subjectIndex].branches[branchIndex].currentXP += xp
-        fullTree[subjectIndex].branches[branchIndex].totalTimeSpent += time
-        fullTree[subjectIndex].branches[branchIndex].missionsCompleted += 1
+        fullTree[sIndex].branches[bIndex].currentXP += xp
+        fullTree[sIndex].branches[bIndex].totalTimeSpent += time
+        fullTree[sIndex].branches[bIndex].missionsCompleted += 1
         
-        // Update the player object in the main view model
         player.totalXP += xp
         mainVM.player = player
         self.player = player
         
-        // Check for unlocks
-        checkForTopicUnlocks(inBranchIndex: branchIndex, inSubjectIndex: subjectIndex)
-        checkForAllBranchUnlocks()
+        checkForTopicUnlocks(inBranchIndex: bIndex, inSubjectIndex: sIndex)
+        updateDisplayedBranches()
+        refreshID = UUID() // Force refresh
     }
-    
-    // --- NEW: Called by the UI when a mastery level is chosen ---
-    /// Sets the mastery goal for a branch and immediately checks if it can be unlocked.
+
     func setMasteryGoal(for branch: KnowledgeBranch, level: MasteryLevel) {
         guard var player = self.player, let mainVM = self.mainViewModel else { return }
+        guard let (sIndex, bIndex) = findBranchIndices(for: branch.id) else { return }
 
         let mastery = PlayerBranchMastery(branchID: branch.name, level: level)
         player.branchMasteryLevels[branch.name] = mastery
-        
-        // Save the updated player object
         mainVM.player = player
         self.player = player
+
+        if !fullTree[sIndex].branches[bIndex].isUnlocked && arePrerequisitesMet(for: fullTree[sIndex].branches[bIndex]) {
+            fullTree[sIndex].branches[bIndex].isUnlocked = true
+        }
         
-        print("Mastery goal for '\(branch.name)' set to \(level.rawValue).")
-        
-        // Immediately check if this new goal unlocks the branch
-        checkForAllBranchUnlocks()
+        updateDisplayedBranches()
+        refreshID = UUID() // Force refresh
     }
     
-    // --- NEW: Determines if the "Unlock" button should be shown ---
-    /// Checks if the basic prerequisites (completion percentage, stats) are met, allowing the player to attempt an unlock.
     func canAttemptUnlock(for branch: KnowledgeBranch) -> Bool {
-        guard let player = self.player else { return false }
+        guard self.player != nil else { return false }
+
+        if branch.prerequisiteBranchNames.isEmpty { return true }
         
-        // 1. Check Stat Requirements
         if let requiredStats = branch.requiredStats {
             for (statName, requiredValue) in requiredStats {
-                if player.stats.value(forName: statName) < requiredValue {
-                    return false
-                }
+                if player!.stats.value(forName: statName) < requiredValue { return false }
             }
         }
         
-        // 2. Check Topic Completion Percentage for each Prerequisite Branch
         for prereqName in branch.prerequisiteBranchNames {
-            guard let prereqBranch = findBranch(withName: prereqName) else { return false }
-            
-            let unlockedTopics = prereqBranch.topics.filter { $0.isUnlocked }.count
-            let totalTopics = prereqBranch.topics.count
-            guard totalTopics > 0 else { continue }
-            
-            if (Double(unlockedTopics) / Double(totalTopics)) < branch.prerequisiteCompletion {
+            guard let prereqBranch = findBranch(withName: prereqName), prereqBranch.isUnlocked else {
+                return false
+            }
+            if prereqBranch.progress < branch.prerequisiteCompletion {
                 return false
             }
         }
-        
         return true
     }
+    
+    func resetSubjectProgress(subjectID: UUID) {
+        guard let sIndex = fullTree.firstIndex(where: { $0.id == subjectID }) else { return }
+        for branch in fullTree[sIndex].branches {
+            if branch.isUnlocked {
+                resetBranchProgress(branchID: branch.id, shouldUpdateView: false)
+            }
+        }
+        updateDisplayedBranches()
+        refreshID = UUID() // Force refresh
+    }
+    
+    func resetBranchProgress(branchID: UUID, shouldUpdateView: Bool = true) {
+        guard let (sIndex, bIndex) = findBranchIndices(for: branchID) else { return }
+        
+        fullTree[sIndex].branches[bIndex].currentXP = 0
+        fullTree[sIndex].branches[bIndex].totalTimeSpent = 0
+        fullTree[sIndex].branches[bIndex].missionsCompleted = 0
+        
+        for i in 0..<fullTree[sIndex].branches[bIndex].topics.count {
+            fullTree[sIndex].branches[bIndex].topics[i].isUnlocked = false
+        }
+        
+        if shouldUpdateView {
+            updateDisplayedBranches()
+            refreshID = UUID() // Force refresh
+        }
+    }
+    
+    func resetTopicProgress(topicID: UUID) {
+        guard let (sIndex, bIndex, tIndex) = findTopicIndices(for: topicID) else { return }
+        guard fullTree[sIndex].branches[bIndex].topics[tIndex].isUnlocked else { return }
+        
+        let topicToReset = fullTree[sIndex].branches[bIndex].topics[tIndex]
+        fullTree[sIndex].branches[bIndex].topics[tIndex].isUnlocked = false
+        
+        fullTree[sIndex].branches[bIndex].currentXP -= topicToReset.xpRequired
+        fullTree[sIndex].branches[bIndex].missionsCompleted -= topicToReset.missionsRequired
+        fullTree[sIndex].branches[bIndex].totalTimeSpent -= topicToReset.timeRequired
+        
+        updateDisplayedBranches()
+        refreshID = UUID() // Force refresh
+    }
 
-    // MARK: - Private Unlocking Logic
+    // MARK: - Private Helper Functions
     
     private func checkForTopicUnlocks(inBranchIndex branchIndex: Int, inSubjectIndex subjectIndex: Int) {
         let branch = fullTree[subjectIndex].branches[branchIndex]
@@ -141,99 +177,44 @@ class KnowledgeTreeViewModel: ObservableObject {
                branch.totalTimeSpent >= topic.timeRequired {
                 
                 fullTree[subjectIndex].branches[branchIndex].topics[i].isUnlocked = true
-                print("TOPIC UNLOCKED: '\(topic.name)' in branch '\(branch.name)'")
             }
         }
     }
     
-    private func checkForAllBranchUnlocks() {
-        for subjectIndex in 0..<fullTree.count {
-            for branchIndex in 0..<fullTree[subjectIndex].branches.count {
-                let branch = fullTree[subjectIndex].branches[branchIndex]
-                guard !branch.isUnlocked else { continue }
-
-                if arePrerequisitesMet(for: branch) {
-                    fullTree[subjectIndex].branches[branchIndex].isUnlocked = true
-                    if !fullTree[subjectIndex].branches[branchIndex].topics.isEmpty {
-                        fullTree[subjectIndex].branches[branchIndex].topics[0].isUnlocked = true
-                    }
-                    print("MAIN BRANCH UNLOCKED: '\(branch.name)'")
-                }
-            }
-        }
-    }
-    
-    // --- UPDATED: This function is now "Mastery-Aware" ---
-    /// Checks all conditions required to unlock a main branch, applying mastery multipliers.
     private func arePrerequisitesMet(for branch: KnowledgeBranch) -> Bool {
-        guard let player = self.player else { return false }
-        
-        // Get the chosen mastery level, defaulting to standard
-        let masteryLevel = player.branchMasteryLevels[branch.name]?.level ?? .standard
-        let multiplier = masteryLevel.multiplier
-        
-        // Check if the basic attempt conditions are met first
-        guard canAttemptUnlock(for: branch) else { return false }
-        
-        // Calculate cumulative progress from prerequisite branches
-        var cumulativeXP: Double = 0
-        var cumulativeMissions: Int = 0
-        var cumulativeTime: TimeInterval = 0
-        
-        for prereqName in branch.prerequisiteBranchNames {
-            guard let prereqBranch = findBranch(withName: prereqName) else { return false }
-            cumulativeXP += prereqBranch.currentXP
-            cumulativeMissions += prereqBranch.missionsCompleted
-            cumulativeTime += prereqBranch.totalTimeSpent
-        }
-        
-        // Check progress against the *multiplied* requirements
-        let requiredXP = branch.totalXpRequired * multiplier
-        let requiredMissions = Int(Double(branch.totalMissionsRequired) * multiplier)
-        let requiredTime = branch.totalTimeRequired * multiplier
-        
-        if cumulativeXP >= requiredXP &&
-           cumulativeMissions >= requiredMissions &&
-           cumulativeTime >= requiredTime {
-            return true
-        }
-        
-        return false
+        return canAttemptUnlock(for: branch)
     }
-
-    // MARK: - Initial Setup Logic
     
     private func unlockInitialNodes() {
         guard let initialSkillDict = self.player?.initialSkills else { return }
-
         for (subjectName, branchNames) in initialSkillDict {
             for branchName in branchNames {
-                unlockBranchAndPrerequisites(branchName: branchName, inSubjectName: subjectName)
+                unlockBranchAndPrerequisites(branchName: branchName, inSubjectName: subjectName, isAuto: true)
             }
         }
     }
     
-    private func unlockBranchAndPrerequisites(branchName: String, inSubjectName subjectName: String) {
-        guard let subjectIndex = fullTree.firstIndex(where: { $0.name == subjectName }),
-              let branchIndex = fullTree[subjectIndex].branches.firstIndex(where: { $0.name == branchName }) else {
-            return
+    private func unlockBranchAndPrerequisites(branchName: String, inSubjectName subjectName: String, isAuto: Bool) {
+        guard let (sIndex, bIndex) = findBranchIndices(forBranchName: branchName, inSubjectName: subjectName) else { return }
+        guard !fullTree[sIndex].branches[bIndex].isUnlocked else { return }
+        
+        var branch = fullTree[sIndex].branches[bIndex]
+        branch.isUnlocked = true
+        branch.isAutoUnlocked = isAuto
+        
+        if isAuto {
+            for i in 0..<branch.topics.count {
+                branch.topics[i].isUnlocked = true
+            }
         }
+        fullTree[sIndex].branches[bIndex] = branch
         
-        guard !fullTree[subjectIndex].branches[branchIndex].isUnlocked else { return }
-        fullTree[subjectIndex].branches[branchIndex].isUnlocked = true
-        
-        for topicIndex in 0..<fullTree[subjectIndex].branches[branchIndex].topics.count {
-            fullTree[subjectIndex].branches[branchIndex].topics[topicIndex].isUnlocked = true
-        }
-        
-        for prereqName in fullTree[subjectIndex].branches[branchIndex].prerequisiteBranchNames {
+        for prereqName in fullTree[sIndex].branches[bIndex].prerequisiteBranchNames {
             if let prereqParentSubjectName = findSubjectName(forBranch: prereqName) {
-                unlockBranchAndPrerequisites(branchName: prereqName, inSubjectName: prereqParentSubjectName)
+                unlockBranchAndPrerequisites(branchName: prereqName, inSubjectName: prereqParentSubjectName, isAuto: isAuto)
             }
         }
     }
-    
-    // MARK: - Helper Methods
     
     private func findBranch(withName name: String) -> KnowledgeBranch? {
         for subject in fullTree {
@@ -242,6 +223,32 @@ class KnowledgeTreeViewModel: ObservableObject {
             }
         }
         return nil
+    }
+
+    private func findBranchIndices(for branchID: UUID) -> (Int, Int)? {
+        for (sIndex, subject) in fullTree.enumerated() {
+            if let bIndex = subject.branches.firstIndex(where: { $0.id == branchID }) {
+                return (sIndex, bIndex)
+            }
+        }
+        return nil
+    }
+    
+    private func findTopicIndices(for topicID: UUID) -> (Int, Int, Int)? {
+        for (sIndex, subject) in fullTree.enumerated() {
+            for (bIndex, branch) in subject.branches.enumerated() {
+                if let tIndex = branch.topics.firstIndex(where: { $0.id == topicID }) {
+                    return (sIndex, bIndex, tIndex)
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func findBranchIndices(forBranchName branchName: String, inSubjectName subjectName: String) -> (Int, Int)? {
+        guard let sIndex = fullTree.firstIndex(where: { $0.name == subjectName }) else { return nil }
+        guard let bIndex = fullTree[sIndex].branches.firstIndex(where: { $0.name == branchName }) else { return nil }
+        return (sIndex, bIndex)
     }
     
     private func findSubjectName(forBranch branchName: String) -> String? {

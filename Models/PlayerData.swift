@@ -92,6 +92,7 @@ struct Player {
     var checkInStreak: Int
     var lastMissionCompletionDate: Date?
     var initialSkills: [String: [String]]
+    var isCollegeLevel: Bool
     
     // --- NEW PROPERTY for Mastery Goals ---
     /// A dictionary to store the chosen mastery level for each branch, keyed by the branch's name.
@@ -122,6 +123,7 @@ struct Player {
         self.unlockedFamiliarSkins = [:]
         
         self.initialSkills = [:]
+        self.isCollegeLevel = false
         self.branchMasteryLevels = [:] // Initialize as an empty dictionary
         
         self.academicTier = .foundationalApprentice

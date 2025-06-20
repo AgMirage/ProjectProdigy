@@ -9,13 +9,20 @@ struct KnowledgeTreeView: View {
         NavigationStack {
             HStack(spacing: 0) {
                 SubjectSidebarView(
-                    subjects: viewModel.fullTree,
+                    subjects: viewModel.subjects,
                     selectedSubject: $viewModel.selectedSubject
-                ) { subject in
-                    viewModel.selectSubject(subject)
+                )
+                
+                if let selectedSubject = viewModel.selectedSubject {
+                    BranchScrollView(subject: selectedSubject)
+                } else {
+                    VStack {
+                        Text("Select a subject to begin.")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-
-                BranchScrollView()
             }
             .navigationTitle("Knowledge Tree")
             #if os(iOS)
@@ -36,12 +43,11 @@ struct KnowledgeTreeView: View {
 struct SubjectSidebarView: View {
     let subjects: [Subject]
     @Binding var selectedSubject: Subject?
-    let onSelect: (Subject) -> Void
-
+    
     var body: some View {
         VStack(spacing: 15) {
             ForEach(subjects) { subject in
-                Button(action: { onSelect(subject) }) {
+                Button(action: { selectedSubject = subject }) {
                     Image(systemName: subject.iconName)
                         .font(.title2)
                         .frame(width: 30, height: 30)
@@ -61,93 +67,134 @@ struct SubjectSidebarView: View {
 // MARK: - Branch Scroll View
 struct BranchScrollView: View {
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
-
+    let subject: Subject
+    @State private var showSubjectResetAlert = false
+    
     var body: some View {
         VStack {
-            Picker("Filter Level", selection: $viewModel.levelFilter) {
-                Text("All").tag(nil as BranchLevel?)
-                ForEach(BranchLevel.allCases, id: \.self) { level in
-                    Text(level.rawValue).tag(level as BranchLevel?)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding([.horizontal, .top])
-
-            ScrollView {
-                if viewModel.selectedSubject != nil {
-                    VStack(alignment: .leading, spacing: 20) {
-                        ForEach(viewModel.filteredBranches) { branch in
-                            BranchView(branch: branch)
+            VStack(spacing: 5) {
+                HStack {
+                    Picker("Filter Level", selection: $viewModel.levelFilter) {
+                        Text("All").tag(nil as BranchLevel?)
+                        ForEach(BranchLevel.allCases, id: \.self) { level in
+                            Text(level.rawValue).tag(level as BranchLevel?)
                         }
                     }
-                    .padding()
-                } else {
-                    Text("Select a subject to begin.").font(.headline)
-                        .foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .pickerStyle(.segmented)
+                    
+                    Button(role: .destructive) {
+                        showSubjectResetAlert = true
+                    } label: {
+                        Image(systemName: "trash.circle.fill")
+                    }
+                    .font(.title2)
                 }
+                .padding([.horizontal, .top])
+                
             }
+            .alert("Reset Subject?", isPresented: $showSubjectResetAlert) {
+                Button("Reset All in \(subject.name)", role: .destructive) {
+                    viewModel.resetSubjectProgress(subjectID: subject.id)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will reset all your progress for every branch within the \(subject.name) subject. This action cannot be undone.")
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(viewModel.branchesToDisplay) { branch in
+                        BranchView(branch: branch)
+                    }
+                }
+                .padding()
+            }
+            .id(viewModel.refreshID)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.groupedBackground)
     }
 }
 
+
 // MARK: - Branch View
 struct BranchView: View {
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     let branch: KnowledgeBranch
     
-    // --- NEW: State to control the hover popover ---
+    @State private var isShowingResetAlert = false
     @State private var isShowingTooltip = false
     
     private var currentMasteryGoal: MasteryLevel? {
         viewModel.player?.branchMasteryLevels[branch.name]?.level
     }
     
-    private var xpGoal: Double {
-        let multiplier = currentMasteryGoal?.multiplier ?? 1.0
-        return branch.totalXpRequired > 0 ? (branch.totalXpRequired * multiplier) : 5000
+    private var statusIconName: String {
+        if branch.isMastered { return "checkmark.seal.fill" }
+        if branch.isUnlocked { return "lock.open.fill" }
+        return "lock.fill"
+    }
+    
+    private var statusColor: Color {
+        if branch.isMastered { return .green }
+        if branch.isUnlocked { return .blue }
+        return .secondary
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
+                Image(systemName: statusIconName)
+                    .foregroundColor(statusColor)
                 Text(branch.name)
                     .font(.title2.bold())
-                Text("(\(branch.level.rawValue))")
-                    .font(.caption).foregroundColor(.secondary)
-                    .padding(5).background(branch.level == .college ? Color.purple.opacity(0.2) : Color.green.opacity(0.2)).cornerRadius(8)
                 Spacer()
-                if !branch.isUnlocked {
-                    Image(systemName: "lock.fill").foregroundColor(.secondary)
-                } else {
-                    Image(systemName: "checkmark.seal.fill").foregroundColor(.blue)
+                if branch.isMastered {
+                    Button { isShowingResetAlert = true } label: {
+                        // --- FIXED: Correct SF Symbol name ---
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
                 }
             }
             
             Text(branch.description).font(.caption).foregroundColor(.secondary)
             
-            if !branch.isUnlocked, let goal = currentMasteryGoal {
-                HStack {
-                    Image(systemName: "target")
-                        .foregroundColor(.accentColor)
-                    Text("Current Goal: \(goal.rawValue)")
-                        .font(.footnote.bold())
-                        .foregroundColor(.accentColor)
+            if let goal = currentMasteryGoal {
+                HStack(spacing: 15) {
+                    HStack {
+                        Image(systemName: "target")
+                        Text("Goal: \(goal.rawValue)")
+                    }
+                    .font(.footnote.bold())
+                    .foregroundColor(.accentColor)
+                    .onHover { hovering in
+                        isShowingTooltip = hovering
+                    }
+                    .popover(isPresented: $isShowingTooltip, arrowEdge: .bottom) {
+                        Text(masteryRequirementsTooltip(goal: goal))
+                            .padding()
+                    }
+                    
+                    Button("(Change)") { viewModel.branchToSetMastery = branch }
+                    .font(.footnote)
                 }
-                .padding(.vertical, 4)
-                // --- FIXED: Replaced .help with a more reliable .onHover and .popover combination ---
-                .onHover(perform: { hovering in
-                    isShowingTooltip = hovering
-                })
-                .popover(isPresented: $isShowingTooltip, arrowEdge: .bottom) {
-                    Text(masteryRequirementsTooltip(goal: goal))
-                        .padding()
-                }
+                .padding(.top, 2)
             }
             
-            ProgressView(value: branch.currentXP, total: xpGoal).tint(branch.isUnlocked ? .blue : .gray)
-            Divider().padding(.bottom, 5)
+            ProgressView(value: branch.progress, total: 1.0) {
+                HStack {
+                    Text("Mastery Progress")
+                    Spacer()
+                    Text("\(Int(branch.progress * 100))%")
+                }
+                .font(.caption)
+            }
+            .tint(branch.isUnlocked ? .blue : .gray)
+            .padding(.bottom, 5)
+
+            Divider()
 
             if branch.isUnlocked {
                 VStack(alignment: .leading) {
@@ -164,6 +211,14 @@ struct BranchView: View {
         .background(Color.secondaryBackground)
         .cornerRadius(12)
         .opacity(branch.isUnlocked ? 1.0 : 0.7)
+        .alert("Reset Branch Progress?", isPresented: $isShowingResetAlert) {
+            Button("Reset", role: .destructive) {
+                viewModel.resetBranchProgress(branchID: branch.id)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to reset your progress for the \(branch.name) branch? This will remove all accumulated XP and study time for this specific branch, and mark it as 'unlocked but not mastered' again.")
+        }
     }
     
     private func masteryRequirementsTooltip(goal: MasteryLevel) -> String {
@@ -185,10 +240,26 @@ struct BranchView: View {
     }
 }
 
+
 // MARK: - Topic View
 struct TopicView: View {
+    @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     let topic: KnowledgeTopic
     let parentBranch: KnowledgeBranch
+    @State private var showTopicResetAlert = false
+    
+    private var multiplier: Double {
+        viewModel.player?.branchMasteryLevels[parentBranch.name]?.level.multiplier ?? 1.0
+    }
+    private var displayXpRequired: Int {
+        Int(topic.xpRequired * multiplier)
+    }
+    private var displayMissionsRequired: Int {
+        Int(Double(topic.missionsRequired) * multiplier)
+    }
+    private var displayTimeRequired: TimeInterval {
+        topic.timeRequired * multiplier
+    }
     
     private func formatHours(_ seconds: TimeInterval) -> String {
         let hours = seconds / 3600
@@ -206,62 +277,83 @@ struct TopicView: View {
                     .foregroundColor(topic.isUnlocked ? .secondary : .primary)
                 
                 if !topic.isUnlocked {
-                    Text("Requires: \(topic.missionsRequired) missions, \(formatHours(topic.timeRequired)) hrs, \(Int(topic.xpRequired)) XP in this branch.")
+                    Text("Requires: \(displayMissionsRequired) missions, \(formatHours(displayTimeRequired)) hrs, \(displayXpRequired) XP in this branch.")
                         .font(.caption2).foregroundColor(.secondary)
                 }
             }
-        }
-        .padding(.vertical, 5)
-    }
-}
-
-// MARK: - Requirements View
-struct RequirementsView: View {
-    @EnvironmentObject var viewModel: KnowledgeTreeViewModel
-    let branch: KnowledgeBranch
-    @State private var showConfirmationAlert = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if viewModel.canAttemptUnlock(for: branch) {
-                
-                if viewModel.player?.branchMasteryLevels[branch.name] != nil {
-                    Button(action: { showConfirmationAlert = true }) {
-                        Label("Change Mastery Goal", systemImage: "pencil")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                } else {
-                    Button(action: { viewModel.branchToSetMastery = branch }) {
-                        Label("Set Mastery Goal & Unlock", systemImage: "key.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
+            
+            Spacer()
+            
+            if topic.isUnlocked {
+                Button {
+                    showTopicResetAlert = true
+                } label: {
+                    // --- FIXED: Correct SF Symbol name ---
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.caption)
                 }
-                
-            } else {
-                Text("Requirements to Unlock:").font(.headline).foregroundColor(.secondary)
-                if !branch.prerequisiteBranchNames.isEmpty {
-                    RequirementRow(icon: "books.vertical.fill", text: "Complete \(Int(branch.prerequisiteCompletion * 100))% of: \(branch.prerequisiteBranchNames.joined(separator: ", "))")
-                }
-                if let requiredStats = branch.requiredStats {
-                    ForEach(requiredStats.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                        RequirementRow(icon: "star.fill", text: "Requires \(key) Stat of \(value)")
-                    }
-                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
             }
         }
-        .alert("Change Mastery Goal?", isPresented: $showConfirmationAlert) {
-            Button("Confirm", role: .destructive) {
-                viewModel.branchToSetMastery = branch
+        .padding(.vertical, 5)
+        .alert("Reset Topic?", isPresented: $showTopicResetAlert) {
+            Button("Reset Topic", role: .destructive) {
+                viewModel.resetTopicProgress(topicID: topic.id)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Are you sure? Your progress towards the current goal will be kept, but the requirements will be updated.")
+            Text("This will reset your progress for the topic '\(topic.name)' and subtract its value from the branch's overall progress.")
         }
     }
 }
+
+// MARK: - Requirements View & Helpers
+struct RequirementsView: View {
+    @EnvironmentObject var viewModel: KnowledgeTreeViewModel
+    let branch: KnowledgeBranch
+    
+    var body: some View {
+        if viewModel.canAttemptUnlock(for: branch) {
+            SetMasteryGoalButtonView(branch: branch)
+        } else {
+            LockedRequirementsTextView(branch: branch)
+        }
+    }
+}
+
+struct SetMasteryGoalButtonView: View {
+    @EnvironmentObject var viewModel: KnowledgeTreeViewModel
+    let branch: KnowledgeBranch
+    
+    var body: some View {
+        Button(action: { viewModel.branchToSetMastery = branch }) {
+            Label("Set Mastery Goal & Unlock", systemImage: "key.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.green)
+    }
+}
+
+struct LockedRequirementsTextView: View {
+    let branch: KnowledgeBranch
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Requirements to Unlock:").font(.headline).foregroundColor(.secondary)
+            if !branch.prerequisiteBranchNames.isEmpty {
+                RequirementRow(icon: "books.vertical.fill", text: "Complete \(Int(branch.prerequisiteCompletion * 100))% of: \(branch.prerequisiteBranchNames.joined(separator: ", "))")
+            }
+            if let requiredStats = branch.requiredStats {
+                ForEach(requiredStats.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
+                    RequirementRow(icon: "star.fill", text: "Requires \(key) Stat of \(value)")
+                }
+            }
+        }
+    }
+}
+
 
 struct RequirementRow: View {
     let icon: String
@@ -309,12 +401,12 @@ struct MasteryGoalSheetView: View {
             Button("Cancel", role: .cancel) { dismiss() }
         }
         .padding()
-        // On macOS, give the sheet a reasonable default size
         #if os(macOS)
         .frame(width: 400, height: 450)
         #endif
     }
 }
+
 
 // MARK: - Preview
 struct KnowledgeTreeView_Previews: PreviewProvider {

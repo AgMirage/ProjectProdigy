@@ -1,10 +1,19 @@
 import Foundation
 import SwiftUI
 
-// MARK: - Form Data Enums (Skill Enums Removed)
+// MARK: - Form Data Enums
 enum GradeLevel: String, CaseIterable, Identifiable {
     case highSchoolFreshman = "High School Freshman", highSchoolSophomore = "High School Sophomore", highSchoolJunior = "High School Junior", highSchoolSenior = "High School Senior", collegeFreshman = "College Freshman", collegeSophomore = "College Sophomore", collegeJunior = "College Junior", collegeSenior = "College Senior", collegeGraduate = "College Graduate Student", postGraduate = "Post-Graduate/Professional"
     var id: Self { self }
+
+    var isCollegeLevel: Bool {
+        switch self {
+        case .collegeFreshman, .collegeSophomore, .collegeJunior, .collegeSenior, .collegeGraduate, .postGraduate:
+            return true
+        default:
+            return false
+        }
+    }
 }
 enum StudyHours: String, CaseIterable, Identifiable {
     case hours0_5 = "0-5 hours/week", hours6_10 = "6-10 hours/week", hours11_15 = "11-15 hours/week", hours16_20 = "16-20 hours/week", hours20plus = "20+ hours/week"
@@ -24,7 +33,11 @@ class CharacterCreationViewModel: ObservableObject {
     @Published var availableAvatars: [Avatar] = []
     @Published var selectedAvatar: Avatar?
     
-    @Published var gradeLevel: GradeLevel?
+    @Published var gradeLevel: GradeLevel? {
+        didSet {
+            handleGradeLevelChange()
+        }
+    }
     @Published var studyHours: StudyHours?
     
     @Published var selectedHobbies = Set<Hobby>()
@@ -48,14 +61,71 @@ class CharacterCreationViewModel: ObservableObject {
     }
     
     func toggleBranchSelection(subjectName: String, branchName: String) {
-        if selectedInitialBranches[subjectName] == nil {
-            selectedInitialBranches[subjectName] = []
-        }
-        
         if selectedInitialBranches[subjectName]?.contains(branchName) == true {
+            // Deselecting
             selectedInitialBranches[subjectName]?.remove(branchName)
+            // Note: Does not deselect dependents, user has to do it manually.
         } else {
+            // Selecting
+            if selectedInitialBranches[subjectName] == nil {
+                selectedInitialBranches[subjectName] = []
+            }
             selectedInitialBranches[subjectName]?.insert(branchName)
+            selectPrerequisites(for: branchName)
+        }
+    }
+    
+    private func selectPrerequisites(for branchName: String) {
+        // --- EDITED LINE: Replaced 'subject' with '_' ---
+        guard let (_, branch) = findSubjectAndBranch(for: branchName) else { return }
+        
+        for prereqName in branch.prerequisiteBranchNames {
+            if let (prereqSubject, _) = findSubjectAndBranch(for: prereqName) {
+                if selectedInitialBranches[prereqSubject.name] == nil {
+                    selectedInitialBranches[prereqSubject.name] = []
+                }
+                if selectedInitialBranches[prereqSubject.name]?.contains(prereqName) == false {
+                    selectedInitialBranches[prereqSubject.name]?.insert(prereqName)
+                    selectPrerequisites(for: prereqName) // Recursive call
+                }
+            }
+        }
+    }
+    
+    private func findSubjectAndBranch(for branchName: String) -> (Subject, KnowledgeBranch)? {
+        for subject in allSubjects {
+            if let branch = subject.branches.first(where: { $0.name == branchName }) {
+                return (subject, branch)
+            }
+        }
+        return nil
+    }
+
+    private func handleGradeLevelChange() {
+        guard let level = gradeLevel else { return }
+        if level.isCollegeLevel {
+            autoSelectFoundationalSkills()
+        } else {
+            // Clear selections if they go back to High School
+            selectedInitialBranches.removeAll()
+        }
+    }
+    
+    private func autoSelectFoundationalSkills() {
+        let foundationalSkills: [String: [String]] = [
+            "Mathematics": ["Algebra I", "Geometry", "Pre-Calculus"],
+            "Chemistry": ["High School Chemistry"],
+            "Biology": ["High School Biology"],
+            "History": ["High School History"]
+        ]
+        
+        for (subjectName, branchNames) in foundationalSkills {
+            if selectedInitialBranches[subjectName] == nil {
+                selectedInitialBranches[subjectName] = Set<String>()
+            }
+            for branchName in branchNames {
+                selectedInitialBranches[subjectName]?.insert(branchName)
+            }
         }
     }
     
@@ -63,8 +133,6 @@ class CharacterCreationViewModel: ObservableObject {
         var newPlayer = Player(username: self.username)
         if let selectedAvatar { newPlayer.currentAvatar = selectedAvatar }
         
-        // --- THIS LINE IS NOW CORRECTED ---
-        // We now convert the Set of branch names into an Array before assigning it.
         newPlayer.initialSkills = self.selectedInitialBranches.mapValues { Array($0) }
         
         newPlayer.stats = calculateStartingStats()
