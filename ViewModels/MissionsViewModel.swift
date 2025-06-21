@@ -9,6 +9,10 @@ class MissionsViewModel: ObservableObject {
     @Published var activeMissions: [Mission] = []
     @Published var isShowingCreateSheet = false
     
+    // Filter State Properties
+    @Published var statusFilter: MissionStatus? = nil
+    @Published var sourceFilter: MissionSource? = nil
+    
     // Form Properties
     @Published var selectedSubject: Subject?
     @Published var selectedBranch: KnowledgeBranch?
@@ -17,6 +21,30 @@ class MissionsViewModel: ObservableObject {
     @Published var missionHours: Int = 0
     @Published var missionMinutes: Int = 30
     @Published var isPomodoroEnabled: Bool = false
+    @Published var scheduledDate: Date?
+
+    // --- EDITED: This is now a published property to be shared with the Settings view. ---
+    @Published var dailyMissionSettings = DailyMissionSettings.default
+
+    var filteredAndSortedMissions: [Mission] {
+        var missions = activeMissions
+
+        if let statusFilter = statusFilter {
+            missions = missions.filter { $0.status == statusFilter }
+        }
+        if let sourceFilter = sourceFilter {
+            missions = missions.filter { $0.source == sourceFilter }
+        }
+        
+        missions.sort {
+            if $0.isPinned != $1.isPinned {
+                return $0.isPinned && !$1.isPinned
+            }
+            return $0.creationDate > $1.creationDate
+        }
+        
+        return missions
+    }
     
     var availableStudyTypes: [StudyType] {
         guard let category = selectedSubject?.category else { return [] }
@@ -24,7 +52,6 @@ class MissionsViewModel: ObservableObject {
     }
     
     var knowledgeTree: [Subject] = []
-    var dailyMissionSettings = DailyMissionSettings.default
     
     private var timer: AnyCancellable?
     private weak var mainViewModel: MainViewModel?
@@ -45,30 +72,110 @@ class MissionsViewModel: ObservableObject {
         self.activeMissions.append(contentsOf: newDailyMissions)
     }
     
+    // MARK: - Reward Calculation
+    
+    private func calculateRewards(
+        for subject: Subject,
+        branch: KnowledgeBranch,
+        studyType: StudyType,
+        duration: TimeInterval,
+        player: Player
+    ) -> (xp: Double, gold: Int) {
+        var baseXP = (duration / 60) * 2.5
+        var baseGold = Int((duration / 60) * 0.5)
+
+        if branch.level == .college {
+            baseXP *= 1.2
+            baseGold = Int(Double(baseGold) * 1.2)
+        }
+
+        switch studyType {
+        case .derivations, .designingExperiment, .writingEssay:
+            baseXP *= 1.3
+        case .reviewingNotes, .watchingVideo:
+            baseXP *= 0.9
+        default:
+            break
+        }
+
+        if subject.category == .stem && player.stats.intelligence > 10 {
+            let bonus = Double(player.stats.intelligence - 10) * 0.02
+            baseXP *= (1.0 + bonus)
+        }
+
+        return (xp: max(1, baseXP), gold: max(1, baseGold))
+    }
+
+    
     // MARK: - Mission Creation & Lifecycle
     
-    /// Creates a standard mission from the user's form input.
     func createMission() {
-        guard let subject = selectedSubject, let branch = selectedBranch, let topic = selectedTopic, let studyType = selectedStudyType else { return }
+        guard let subject = selectedSubject,
+              let branch = selectedBranch,
+              let topic = selectedTopic,
+              let studyType = selectedStudyType,
+              let player = mainViewModel?.player else { return }
         
         let totalDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
         let initialTimeRemaining = isPomodoroEnabled ? pomodoroStudyDuration : totalDuration
         
-        let newMission = Mission(id: UUID(), subjectName: subject.name, branchName: branch.name, topicName: topic.name, studyType: studyType, creationDate: Date(), totalDuration: totalDuration, timeRemaining: initialTimeRemaining, status: .pending, isPomodoro: isPomodoroEnabled, xpReward: (totalDuration / 60) * 2.5, goldReward: Int((totalDuration / 60) * 0.5))
+        let rewards = calculateRewards(
+            for: subject,
+            branch: branch,
+            studyType: studyType,
+            duration: totalDuration,
+            player: player
+        )
+        
+        var newMission = Mission(id: UUID(), subjectName: subject.name, branchName: branch.name, topicName: topic.name, studyType: studyType, creationDate: Date(), totalDuration: totalDuration, timeRemaining: initialTimeRemaining, status: .pending, isPomodoro: isPomodoroEnabled, xpReward: rewards.xp, goldReward: rewards.gold)
+        newMission.scheduledDate = self.scheduledDate
         
         activeMissions.append(newMission)
         isShowingCreateSheet = false
         resetForm()
     }
     
-    /// Creates a new mission from a Dungeon Stage template.
+    /// --- NEW: Quick Mission Generation ---
+    func generateQuickMission() {
+        guard let player = mainViewModel?.player,
+              let (topic, branchName, subjectName) = findRandomUnlockedTopic(in: knowledgeTree) else {
+            mainViewModel?.addLogEntry("Could not generate Quick Mission. Unlock more topics first!", color: .orange)
+            return
+        }
+        
+        let duration: TimeInterval = 600 // 10 minutes
+        let subject = knowledgeTree.first(where: { $0.name == subjectName })!
+        let branch = subject.branches.first(where: { $0.name == branchName })!
+        
+        let rewards = calculateRewards(for: subject, branch: branch, studyType: .reviewingNotes, duration: duration, player: player)
+        
+        let quickMission = Mission(
+            id: UUID(),
+            subjectName: subjectName,
+            branchName: branchName,
+            topicName: topic.name,
+            studyType: .reviewingNotes, // Default to a simple type
+            creationDate: Date(),
+            totalDuration: duration,
+            timeRemaining: duration,
+            status: .pending,
+            xpReward: rewards.xp,
+            goldReward: rewards.gold,
+            source: .automatic // Using automatic for now, could be its own source
+        )
+        
+        activeMissions.insert(quickMission, at: 0)
+        mainViewModel?.addLogEntry("Quick Mission generated: \(topic.name)!", color: .purple)
+    }
+
+    
     func createMission(from stage: DungeonStage, in dungeon: Dungeon) {
         let topicName = "Dungeon: \(stage.name)"
         let duration = stage.requiredDuration
         let xpReward = (duration / 60) * 2.5
         let goldReward = Int((duration / 60) * 0.5)
 
-        let newMission = Mission(id: UUID(), subjectName: dungeon.subjectName, branchName: dungeon.name, topicName: topicName, studyType: stage.studyType, creationDate: Date(), totalDuration: duration, timeRemaining: duration, status: .pending, xpReward: xpReward, goldReward: goldReward)
+        let newMission = Mission(id: UUID(), subjectName: dungeon.subjectName, branchName: dungeon.name, topicName: topicName, studyType: stage.studyType, creationDate: Date(), totalDuration: duration, timeRemaining: duration, status: .pending, xpReward: xpReward, goldReward: goldReward, source: .dungeon)
         
         activeMissions.append(newMission)
     }
@@ -76,6 +183,10 @@ class MissionsViewModel: ObservableObject {
     func startMission(mission: Mission) {
         guard let index = activeMissions.firstIndex(where: { $0.id == mission.id }) else { return }
         stopAllMissions()
+        
+        var missionToStart = activeMissions[index]
+        missionToStart.allowedPauseTime = missionToStart.totalDuration * 0.1
+        activeMissions[index] = missionToStart
         
         if activeMissions[index].isPomodoro {
             if activeMissions[index].pomodoroCycle == 0 {
@@ -92,7 +203,14 @@ class MissionsViewModel: ObservableObject {
     
     func pauseMission(mission: Mission) {
         guard let index = activeMissions.firstIndex(where: { $0.id == mission.id }) else { return }
-        activeMissions[index].status = .paused
+        
+        var missionToPause = activeMissions[index]
+        if let allowedTime = missionToPause.allowedPauseTime, missionToPause.timePaused < allowedTime {
+             // Future logic can go here
+        }
+        missionToPause.status = .paused
+        activeMissions[index] = missionToPause
+        
         mainViewModel?.pauseActiveMission()
         timer?.cancel()
     }
@@ -107,8 +225,13 @@ class MissionsViewModel: ObservableObject {
         activeMissions.remove(atOffsets: offsets)
     }
     
+    func togglePin(for mission: Mission) {
+        guard let index = activeMissions.firstIndex(where: { $0.id == mission.id }) else { return }
+        activeMissions[index].isPinned.toggle()
+    }
+
     func resetForm() {
-        selectedSubject = nil; selectedBranch = nil; selectedTopic = nil; selectedStudyType = nil; missionHours = 0; missionMinutes = 30; isPomodoroEnabled = false
+        selectedSubject = nil; selectedBranch = nil; selectedTopic = nil; selectedStudyType = nil; missionHours = 0; missionMinutes = 30; isPomodoroEnabled = false; scheduledDate = nil
     }
     
     private func stopAllMissions() {
@@ -119,6 +242,11 @@ class MissionsViewModel: ObservableObject {
     private func updateTimer() {
         guard let activeIndex = activeMissions.firstIndex(where: { $0.status == .inProgress }) else {
             timer?.cancel()
+            return
+        }
+        
+        if activeMissions[activeIndex].status == .paused {
+            activeMissions[activeIndex].timePaused += 1
             return
         }
         
@@ -147,7 +275,32 @@ class MissionsViewModel: ObservableObject {
             }
             activeMissions[activeIndex] = mission
         } else {
-            completeMission(mission: activeMissions[activeIndex])
+            if mission.timeRemaining <= 0 {
+                activeMissions[activeIndex].status = .failed
+                mainViewModel?.addLogEntry("Mission Failed: \(mission.topicName)", color: .red)
+                timer?.cancel()
+            } else {
+                completeMission(mission: activeMissions[activeIndex])
+            }
         }
+    }
+    
+    /// Finds a random, unlocked topic from the entire knowledge tree.
+    private func findRandomUnlockedTopic(in tree: [Subject]) -> (topic: KnowledgeTopic, branchName: String, subjectName: String)? {
+        let allUnlockedBranches = tree.flatMap { subject in
+            subject.branches
+                .filter { $0.isUnlocked }
+                .map { (branch: $0, subjectName: subject.name) }
+        }
+        
+        guard !allUnlockedBranches.isEmpty else { return nil }
+        
+        let randomBranchInfo = allUnlockedBranches.randomElement()!
+        
+        let unlockedTopics = randomBranchInfo.branch.topics.filter { $0.isUnlocked }
+        
+        guard let randomTopic = unlockedTopics.randomElement() else { return nil }
+        
+        return (topic: randomTopic, branchName: randomBranchInfo.branch.name, subjectName: randomBranchInfo.subjectName)
     }
 }

@@ -1,18 +1,9 @@
-//
-//  AutomaticMissionsSettingsView.swift
-//  ProjectProdigy
-//
-//  Created by Kaia Quinn on 6/11/25.
-//
-
-
 import SwiftUI
 
 struct AutomaticMissionsSettingsView: View {
     
-    // The view holds its own state for the settings.
-    // In a real app, this would be loaded from and saved to persistent storage.
-    @State private var settings = DailyMissionSettings.default
+    // --- EDITED: This now uses a Binding to a single source of truth ---
+    @Binding var settings: DailyMissionSettings
     
     // State to manage the hours and minutes for the duration picker
     @State private var missionHours: Int = 1
@@ -59,8 +50,11 @@ struct AutomaticMissionsSettingsView: View {
             }
         }
         .navigationTitle("Daily Missions")
+        // --- EDITED: State is now updated live via the binding. ---
+        // onDisappear is no longer needed.
         .onAppear(perform: setupInitialState)
-        .onDisappear(perform: saveSettings)
+        .onChange(of: missionHours, syncMissionDuration)
+        .onChange(of: missionMinutes, syncMissionDuration)
     }
     
     // MARK: - Helper Functions
@@ -72,13 +66,10 @@ struct AutomaticMissionsSettingsView: View {
         missionMinutes = (Int(duration) % 3600) / 60
     }
     
-    private func saveSettings() {
-        // When the view disappears, combine hours and minutes back into a TimeInterval
+    // --- EDITED: This function now updates the binding whenever the pickers change. ---
+    private func syncMissionDuration() {
         let durationInSeconds = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
         settings.missionDuration = durationInSeconds
-        
-        // This is where you would save the 'settings' object to the device.
-        print("Settings saved: \(settings)")
     }
 }
 
@@ -119,8 +110,9 @@ struct WeekdaySelectorView: View {
 // MARK: - Preview
 struct AutomaticMissionsSettingsView_Previews: PreviewProvider {
     static var previews: some View {
+        // --- EDITED: The preview now uses a constant binding. ---
         NavigationStack {
-            AutomaticMissionsSettingsView()
+            AutomaticMissionsSettingsView(settings: .constant(.default))
         }
     }
 }

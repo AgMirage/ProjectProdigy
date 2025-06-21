@@ -3,11 +3,12 @@ import SwiftUI
 struct SettingsView: View {
     
     @StateObject private var viewModel = SettingsViewModel()
+    @EnvironmentObject var mainViewModel: MainViewModel // Access the MainViewModel
+    @EnvironmentObject var missionsViewModel: MissionsViewModel // --- ADDED: Access the MissionsViewModel
 
     var body: some View {
         NavigationStack {
             Form {
-                // --- Section: Appearance ---
                 Section(header: Text("Appearance")) {
                     Picker("App Theme", selection: $viewModel.selectedTheme) {
                         ForEach(Theme.allCases) { theme in
@@ -19,16 +20,13 @@ struct SettingsView: View {
                     }
                 }
                 
-                // --- EDITED SECTION: Added new link ---
-                // --- Section: Automation ---
                 Section(header: Text("Automation")) {
+                    // --- EDITED: Pass a binding to the settings from the MissionsViewModel ---
                     NavigationLink("Automatic Daily Missions") {
-                        AutomaticMissionsSettingsView()
+                        AutomaticMissionsSettingsView(settings: $missionsViewModel.dailyMissionSettings)
                     }
                 }
-                // --- END EDITED SECTION ---
                 
-                // --- Section: Sound & Notifications ---
                 Section(header: Text("Sound & Notifications")) {
                     Toggle("Enable Notifications", isOn: $viewModel.notificationsEnabled)
                     Toggle("Enable Sound Effects", isOn: $viewModel.soundEffectsEnabled)
@@ -40,7 +38,14 @@ struct SettingsView: View {
                     .padding(.vertical, 5)
                 }
                 
-                // --- Section: Data Management ---
+                // --- NEW: Data Management Section ---
+                Section(header: Text("Data Management")) {
+                    NavigationLink("View Mission Archive") {
+                        // Pass the archived missions from the MainViewModel
+                        ArchiveView(archivedMissions: mainViewModel.archivedMissions)
+                    }
+                }
+                
                 Section(
                     header: Text("Danger Zone"),
                     footer: Text("Resetting cannot be undone. All of your characters, progress, and items will be permanently deleted.")
@@ -52,7 +57,6 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            // Confirmation alert for the reset action
             .alert("Are you absolutely sure?", isPresented: $viewModel.isShowingResetAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Reset Progress", role: .destructive) {
@@ -69,6 +73,11 @@ struct SettingsView: View {
 // MARK: - Preview
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
+        let mainVM = MainViewModel(player: Player(username: "Preview"))
+        // The preview now needs the MainViewModel in its environment
         SettingsView()
+            .environmentObject(mainVM)
+            // --- ADDED: Also provide the MissionsViewModel for the preview ---
+            .environmentObject(MissionsViewModel(mainViewModel: mainVM))
     }
 }

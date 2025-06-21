@@ -94,9 +94,11 @@ struct Player {
     var initialSkills: [String: [String]]
     var isCollegeLevel: Bool
     
-    // --- NEW PROPERTY for Mastery Goals ---
-    /// A dictionary to store the chosen mastery level for each branch, keyed by the branch's name.
     var branchMasteryLevels: [String: PlayerBranchMastery]
+    var dungeonProgress: [String: PlayerDungeonStatus]
+    
+    // --- NEW: Mission Archive ---
+    var archivedMissions: [Mission]
 
 
     init(username: String) {
@@ -124,7 +126,9 @@ struct Player {
         
         self.initialSkills = [:]
         self.isCollegeLevel = false
-        self.branchMasteryLevels = [:] // Initialize as an empty dictionary
+        self.branchMasteryLevels = [:]
+        self.dungeonProgress = [:]
+        self.archivedMissions = [] // Initialize as empty
         
         self.academicTier = .foundationalApprentice
         self.stats = .default

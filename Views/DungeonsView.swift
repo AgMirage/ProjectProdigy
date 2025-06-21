@@ -5,8 +5,8 @@ struct DungeonsView: View {
     @StateObject private var viewModel: DungeonsViewModel
     @Environment(\.dismiss) private var dismiss
     
-    init(missionsViewModel: MissionsViewModel) {
-        _viewModel = StateObject(wrappedValue: DungeonsViewModel(missionsViewModel: missionsViewModel))
+    init(missionsViewModel: MissionsViewModel, mainViewModel: MainViewModel) {
+        _viewModel = StateObject(wrappedValue: DungeonsViewModel(missionsViewModel: missionsViewModel, mainViewModel: mainViewModel))
     }
     
     var body: some View {
@@ -111,7 +111,10 @@ struct DungeonRowView: View {
 // MARK: - Preview
 struct DungeonsView_Previews: PreviewProvider {
     static var previews: some View {
-        DungeonsView(missionsViewModel: MissionsViewModel(mainViewModel: MainViewModel(player: Player(username: "Preview"))))
+        // --- FIXED: Added the required mainViewModel parameter ---
+        let mainVM = MainViewModel(player: Player(username: "Preview"))
+        let missionsVM = MissionsViewModel(mainViewModel: mainVM)
+        DungeonsView(missionsViewModel: missionsVM, mainViewModel: mainVM)
     }
 }
 

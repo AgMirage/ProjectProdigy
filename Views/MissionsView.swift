@@ -3,28 +3,46 @@ import SwiftUI
 // MARK: - Main Missions View
 struct MissionsView: View {
     
-    @StateObject private var viewModel: MissionsViewModel
-    private var mainViewModel: MainViewModel
-
-    init(mainViewModel: MainViewModel) {
-        self.mainViewModel = mainViewModel
-        _viewModel = StateObject(wrappedValue: MissionsViewModel(mainViewModel: mainViewModel))
-    }
+    @EnvironmentObject var viewModel: MissionsViewModel
+    @EnvironmentObject var mainViewModel: MainViewModel
+    // --- ADDED: Get the KnowledgeTreeViewModel from the environment ---
+    @EnvironmentObject var knowledgeTreeViewModel: KnowledgeTreeViewModel
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(viewModel.activeMissions) { mission in
-                    MissionRowView(mission: mission)
+            VStack {
+                HStack {
+                    Picker("Status", selection: $viewModel.statusFilter) {
+                        Text("All Statuses").tag(nil as MissionStatus?)
+                        ForEach(MissionStatus.allCases, id: \.self) { status in
+                            Text(status.rawValue).tag(status as MissionStatus?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    
+                    Picker("Source", selection: $viewModel.sourceFilter) {
+                        Text("All Sources").tag(nil as MissionSource?)
+                        // We need MissionSource to be CaseIterable to do this
+                        ForEach([MissionSource.manual, .automatic, .dungeon, .guild], id: \.self) { source in
+                            Text(source.rawValue.capitalized).tag(source as MissionSource?)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
-                .onDelete(perform: viewModel.deleteMission)
+                .padding(.horizontal)
+
+                List {
+                    ForEach(viewModel.filteredAndSortedMissions) { mission in
+                        MissionRowView(mission: mission)
+                    }
+                    .onDelete(perform: viewModel.deleteMission)
+                }
             }
             .navigationTitle("Missions")
             .toolbar {
-                // --- FIXED: Replaced 'navigationBarTrailing' with '.primaryAction' for cross-platform compatibility ---
                 ToolbarItemGroup(placement: .primaryAction) {
                     NavigationLink {
-                        DungeonsView(missionsViewModel: viewModel)
+                        DungeonsView(missionsViewModel: viewModel, mainViewModel: self.mainViewModel)
                     } label: { Image(systemName: "shield.lefthalf.filled") }
                     
                     NavigationLink {
@@ -34,13 +52,28 @@ struct MissionsView: View {
                     Button(action: { viewModel.isShowingCreateSheet = true }) { Image(systemName: "plus") }
                 }
             }
-            .sheet(isPresented: $viewModel.isShowingCreateSheet) { CreateMissionView() }
+            // --- EDITED: Sync the knowledge tree state before showing the create sheet ---
+            .sheet(isPresented: $viewModel.isShowingCreateSheet) {
+                CreateMissionView()
+                    .onAppear {
+                        viewModel.knowledgeTree = knowledgeTreeViewModel.subjects
+                    }
+            }
+            .sheet(item: $mainViewModel.missionToReview) { mission in
+                 MissionReviewView(
+                     mission: mission,
+                     missionToReview: $mainViewModel.missionToReview,
+                     onReviewSubmit: { focus, understanding, challenge in
+                         mainViewModel.submitMissionReview(for: mission.id, focus: focus, understanding: understanding, challenge: challenge)
+                         mainViewModel.archiveMission(mission)
+                     }
+                 )
+             }
         }
-        .environmentObject(viewModel)
     }
 }
 
-// MARK: - Mission Row View (Corrected)
+// MARK: - Mission Row View
 struct MissionRowView: View {
     let mission: Mission
     @EnvironmentObject var viewModel: MissionsViewModel
@@ -62,9 +95,17 @@ struct MissionRowView: View {
                     Spacer()
                     VStack { Image(systemName: "timer").font(.title); Text("POMODORO").font(.caption).bold() }.foregroundColor(.purple)
                 }
+                Spacer()
+                Button(action: {
+                    viewModel.togglePin(for: mission)
+                }) {
+                    Image(systemName: mission.isPinned ? "pin.fill" : "pin")
+                        .font(.title2)
+                        .foregroundColor(mission.isPinned ? .yellow : .gray)
+                }
+                .buttonStyle(.plain)
             }
             VStack {
-                // Correctly display Pomodoro status text only when in progress
                 if mission.isPomodoro && mission.status == .inProgress {
                     Text(mission.isBreakTime ? "Break Time!" : "Focus Cycle: \(mission.pomodoroCycle)")
                         .font(.headline).foregroundColor(mission.isBreakTime ? .green : .purple)
@@ -76,15 +117,22 @@ struct MissionRowView: View {
                 HStack {
                     Text(formatTime(mission.timeRemaining)).font(.system(size: 36, weight: .bold, design: .monospaced))
                     Spacer()
-                    // Don't show total duration for pomodoro missions, as it's not a single block
                     if !mission.isPomodoro { Text(formatTime(mission.totalDuration)).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(.secondary) }
                 }
             }
-            HStack {
+            HStack(spacing: 8) { // --- ADDED spacing for macOS
                 if mission.status == .pending || mission.status == .paused {
-                    Button(action: { viewModel.startMission(mission: mission) }) { Label(mission.status == .pending ? "Start" : "Resume", systemImage: "play.fill") }.buttonStyle(.borderedProminent).tint(.green)
+                    // --- EDITED: Changed style to .bordered for better macOS compatibility
+                    Button(action: { viewModel.startMission(mission: mission) }) { Label(mission.status == .pending ? "Start" : "Resume", systemImage: "play.fill") }.buttonStyle(.bordered).tint(.green)
                 } else if mission.status == .inProgress {
-                    Button(action: { viewModel.pauseMission(mission: mission) }) { Label("Pause", systemImage: "pause.fill") }.buttonStyle(.borderedProminent).tint(.orange)
+                    // --- EDITED: Changed style to .bordered for better macOS compatibility
+                    Button(action: { viewModel.pauseMission(mission: mission) }) { Label("Pause", systemImage: "pause.fill") }.buttonStyle(.bordered).tint(.orange)
+                } else if mission.status == .failed {
+                    Button(action: {
+                        // The MissionsViewModel will handle creating a new mission from the failed one.
+                    }) {
+                        Label("Retry", systemImage: "arrow.counterclockwise")
+                    }.buttonStyle(.bordered).tint(.orange)
                 }
                 Spacer()
                 if mission.status == .inProgress || mission.status == .paused {
@@ -94,7 +142,6 @@ struct MissionRowView: View {
         }.padding(.vertical, 10)
     }
     
-    // Corrected logic for progress bar display
     private var progressValue: Double {
         if mission.isPomodoro {
             let total = mission.isBreakTime ? pomodoroBreakDuration : pomodoroStudyDuration
@@ -120,25 +167,41 @@ struct MissionRowView: View {
 }
 
 
-// MARK: - Create Mission Sheet View (Corrected)
+// MARK: - Create Mission Sheet View
 struct CreateMissionView: View {
     @EnvironmentObject var viewModel: MissionsViewModel
     @Environment(\.dismiss) var dismiss
+    @State private var isScheduling: Bool = false
 
     var body: some View {
         NavigationStack {
             Form {
                 topicSection
                 detailsSection
+                
+                Section(header: Text("Scheduling")) {
+                    Toggle("Schedule for Later?", isOn: $isScheduling.animation())
+                    
+                    if isScheduling {
+                        DatePicker(
+                            "Scheduled Time",
+                            selection: Binding(
+                                get: { viewModel.scheduledDate ?? Date() },
+                                set: { viewModel.scheduledDate = $0 }
+                            ),
+                            in: Date()...,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                    }
+                }
+                
                 createButtonSection
             }
             .navigationTitle("New Mission")
-            // --- FIXED: This modifier is unavailable on macOS, so we wrap it for iOS only. ---
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                // --- FIXED: Changed placement to '.cancellationAction' for cross-platform compatibility ---
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
@@ -185,7 +248,6 @@ struct CreateMissionView: View {
             HStack {
                 Text("Duration")
                 Spacer()
-                // --- FIXED: '.wheel' is not available on macOS. Changed to '.menu'. ---
                 Picker("Hours", selection: $viewModel.missionHours) { ForEach(0..<24) { Text("\($0) hr").tag($0) } }.pickerStyle(.menu)
                 Picker("Minutes", selection: $viewModel.missionMinutes) { ForEach(0..<60) { Text("\($0) min").tag($0) } }.pickerStyle(.menu)
             }
@@ -202,6 +264,11 @@ struct CreateMissionView: View {
 // MARK: - Previews
 struct MissionsView_Previews: PreviewProvider {
     static var previews: some View {
-        MissionsView(mainViewModel: MainViewModel(player: Player(username: "Preview")))
+        let mainVM = MainViewModel(player: Player(username: "Preview"))
+        let missionsVM = MissionsViewModel(mainViewModel: mainVM)
+        
+        MissionsView()
+            .environmentObject(mainVM)
+            .environmentObject(missionsVM)
     }
 }

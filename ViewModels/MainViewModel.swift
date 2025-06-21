@@ -23,16 +23,14 @@ class MainViewModel: ObservableObject {
 
     @Published var player: Player
     @Published var systemLog: [LogEntry] = []
+    
+    @Published var archivedMissions: [Mission] = []
+    @Published var missionToReview: Mission? // For triggering the review sheet
 
-    // The MainViewModel now owns the AchievementManager for this player session.
     @Published var achievementManager: AchievementManager
-
-    // This will hold the mission that is currently running.
     @Published var activeMission: Mission?
 
-    // This is now a computed property based on the player's procrastination value.
     var procrastinationMonsterScale: CGFloat {
-        // The scale grows slightly as the value increases from 0.
         1.0 + (player.procrastinationMonsterValue * 0.1)
     }
 
@@ -44,12 +42,12 @@ class MainViewModel: ObservableObject {
     init(player: Player) {
         self.player = player
         self.achievementManager = AchievementManager()
+        self.archivedMissions = player.archivedMissions
 
         checkAndUpdateStreak()
         addLogEntry("System initialized. Welcome, \(player.username)!", color: .green)
         addLogEntry("You are currently a [\(player.academicTier.rawValue)].", color: .cyan)
 
-        // Listen for newly unlocked achievements from the manager.
         self.achievementCancellable = achievementManager.$newlyUnlocked.sink { [weak self] newAchievements in
             guard let self = self else { return }
             for achievement in newAchievements {
@@ -62,62 +60,114 @@ class MainViewModel: ObservableObject {
 
     func setActiveMission(_ mission: Mission) {
         self.activeMission = mission
-
-        // Reward for starting a mission by slightly reducing procrastination.
         player.procrastinationMonsterValue = max(0, player.procrastinationMonsterValue - 0.5)
-
-        // Start giving the active familiar XP
         startFamiliarXpTimer()
-
         addLogEntry("Mission Started: \(mission.topicName)", color: .green)
     }
 
     func pauseActiveMission() {
-        self.activeMission = nil // Setting to nil makes the familiar "sad"
+        self.activeMission = nil
         stopFamiliarXpTimer()
         addLogEntry("Mission Paused.", color: .orange)
     }
 
     func completeMission(_ mission: Mission) {
+        var completedMission = mission
+        completedMission.status = .completed
+        
         self.activeMission = nil
         stopFamiliarXpTimer()
 
-        // Grant Rewards
-        player.gold += mission.goldReward
-        player.totalXP += mission.xpReward
+        player.gold += completedMission.goldReward
+        player.totalXP += completedMission.xpReward
         player.lastMissionCompletionDate = Date()
-        player.checkInStreak += 1 // A simple increment, real logic could be more complex.
+        player.checkInStreak += 1
 
-        addLogEntry("Mission Complete! +\(Int(mission.xpReward)) XP, +\(mission.goldReward) Gold.", color: .yellow)
+        addLogEntry("Mission Complete! +\(Int(completedMission.xpReward)) XP, +\(completedMission.goldReward) Gold.", color: .yellow)
 
-        // Process Achievements
         achievementManager.processEvent(.missionCompleted, for: &player)
         achievementManager.processEvent(.goldEarned(totalAmount: player.gold), for: &player)
         achievementManager.processEvent(.streakReached(days: player.checkInStreak), for: &player)
+        achievementManager.processEvent(.loginTime(hour: Calendar.current.component(.hour, from: Date())), for: &player)
 
-        let hour = Calendar.current.component(.hour, from: Date())
-        achievementManager.processEvent(.loginTime(hour: hour), for: &player)
+        if completedMission.source == .dungeon {
+            handleDungeonStageCompletion(for: completedMission)
+        }
+        
+        // Present the review sheet instead of archiving immediately
+        self.missionToReview = completedMission
     }
+    
+    // --- NEW: Function to handle review submission ---
+    func submitMissionReview(for missionID: UUID, focus: Int, understanding: Int, challenge: String) {
+        // This function will be called by the review view.
+        // For now, it just gives a small bonus.
+        let bonusGold = 5
+        player.gold += bonusGold
+        addLogEntry("Review submitted! +\(bonusGold) Gold bonus.", color: .yellow)
+    }
+
+    func archiveMission(_ mission: Mission) {
+        // This will be called after the review is submitted or skipped.
+        let missionToArchive = mission
+        // Find the mission in the archived list to add review data if it exists
+        if let index = player.archivedMissions.firstIndex(where: { $0.id == mission.id }) {
+             player.archivedMissions[index] = missionToArchive
+        } else {
+            player.archivedMissions.insert(missionToArchive, at: 0)
+        }
+        self.archivedMissions = player.archivedMissions
+        addLogEntry("Mission '\(mission.topicName)' moved to archive.", color: .gray)
+    }
+
 
     func completeTestMission() {
-        // The test function now uses the real completion logic.
         self.completeMission(Mission.sample)
     }
+    
+    private func handleDungeonStageCompletion(for completedMission: Mission) {
+        let dungeonID = completedMission.branchName
+        
+        guard let dungeon = DungeonList.allDungeons.first(where: { $0.id == dungeonID }),
+              var progress = player.dungeonProgress[dungeonID] else {
+            return
+        }
+        
+        progress.currentStage += 1
+        
+        addLogEntry("Dungeon Stage Cleared: \(completedMission.topicName)!", color: .cyan)
+
+        if progress.currentStage > dungeon.stages.count {
+            progress.isCompleted = true
+            
+            let finalReward = dungeon.finalReward
+            player.gold += finalReward.gold
+            player.totalXP += finalReward.xp
+            
+            addLogEntry("Dungeon Complete: \(dungeon.name)! You earned a bonus of \(finalReward.gold) Gold and \(Int(finalReward.xp)) XP!", color: .yellow)
+            
+            if let titleID = finalReward.title, let title = TitleList.byId(titleID) {
+                if !player.unlockedTitles.contains(where: { $0.id == title.id }) {
+                    player.unlockedTitles.append(title)
+                    addLogEntry("New Title Unlocked: \(title.name)!", color: .purple)
+                }
+            }
+        }
+        
+        player.dungeonProgress[dungeonID] = progress
+    }
+
 
     // MARK: - Familiar Logic
 
     private func startFamiliarXpTimer() {
-        stopFamiliarXpTimer() // Ensure no old timers are running
+        stopFamiliarXpTimer()
         
-        // --- EDITED SECTION ---
-        // We schedule the timer as before, but ensure the code inside its block
-        // is dispatched to the main thread to safely interact with our @MainActor class.
         familiarXpTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.grantFamiliarXp()
             }
         }
-        // --- END EDITED SECTION ---
     }
 
     private func stopFamiliarXpTimer() {
@@ -130,11 +180,9 @@ class MainViewModel: ObservableObject {
 
         let xpGained = 5.0
         player.unlockedFamiliars[familiarIndex].xp += xpGained
-        player.activeFamiliar.xp += xpGained // Also update the active familiar copy
+        player.activeFamiliar.xp += xpGained
 
         print("Familiar '\(player.activeFamiliar.name)' gained \(xpGained) XP.")
-
-        // Add level up logic here later
     }
 
     // MARK: - System Log & Streak

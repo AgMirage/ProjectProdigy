@@ -3,9 +3,14 @@ import SwiftUI
 // MARK: - Main App View with TabBar
 struct MainView: View {
     @StateObject private var viewModel: MainViewModel
+    @StateObject private var missionsViewModel: MissionsViewModel
+    // --- ADDED: The KnowledgeTreeViewModel is now a StateObject here to persist its state. ---
+    @StateObject private var knowledgeTreeViewModel = KnowledgeTreeViewModel()
 
     init(player: Player) {
-        _viewModel = StateObject(wrappedValue: MainViewModel(player: player))
+        let mainVM = MainViewModel(player: player)
+        _viewModel = StateObject(wrappedValue: mainVM)
+        _missionsViewModel = StateObject(wrappedValue: MissionsViewModel(mainViewModel: mainVM))
     }
 
     var body: some View {
@@ -13,7 +18,7 @@ struct MainView: View {
             MainDashboardView()
                 .tabItem { Label("Home", systemImage: "house.fill") }
 
-            MissionsView(mainViewModel: viewModel)
+            MissionsView()
                 .tabItem { Label("Missions", systemImage: "list.bullet.clipboard.fill") }
             
             KnowledgeTreeView()
@@ -29,12 +34,20 @@ struct MainView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
         .environmentObject(viewModel)
+        .environmentObject(missionsViewModel)
+        // --- ADDED: Inject the single instance of the viewModel into the environment. ---
+        .environmentObject(knowledgeTreeViewModel)
+        // --- ADDED: Initialize the knowledge tree when the main view appears. ---
+        .onAppear {
+            knowledgeTreeViewModel.reinitialize(with: viewModel)
+        }
     }
 }
 
 // MARK: - Main Dashboard Screen
 struct MainDashboardView: View {
     @EnvironmentObject var viewModel: MainViewModel
+    @EnvironmentObject var missionsViewModel: MissionsViewModel // Access MissionsViewModel
     @State private var isShowingTitlesSheet = false
 
     var body: some View {
@@ -59,8 +72,17 @@ struct MainDashboardView: View {
                     
                     SystemLogView(logEntries: viewModel.systemLog)
                     
-                    Button("Complete Test Mission") { viewModel.completeTestMission() }
-                        .buttonStyle(.borderedProminent).padding()
+                    // --- NEW: Quick Mission Button ---
+                    Button(action: {
+                        missionsViewModel.generateQuickMission()
+                    }) {
+                        Label("Start Quick Mission", systemImage: "wand.and.stars")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                    .padding()
                 }
                 .padding()
             }
@@ -72,7 +94,7 @@ struct MainDashboardView: View {
 }
 
 
-// MARK: - (Existing Helper Views)
+// MARK: - (Existing Helper Views - Unchanged)
 struct PlayerHeaderView: View {
     let player: Player
     let onTap: () -> Void
@@ -140,15 +162,12 @@ struct StreakView: View {
     }
 }
 
-// --- FIXED: This view no longer contains its own ScrollView ---
 struct SystemLogView: View {
     let logEntries: [LogEntry]
     var body: some View {
         VStack(alignment: .leading) {
             Text("System Log").font(.headline).padding([.leading, .top])
             
-            // The ScrollView and fixed frame have been removed from here.
-            // The content now expands naturally within the parent ScrollView.
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(logEntries) { entry in
                     HStack(alignment: .top) {
@@ -177,8 +196,6 @@ struct MainView_Previews: PreviewProvider {
     }
 }
 
-
-// MARK: - Cross-Platform Color Helpers
 fileprivate extension Color {
     #if os(macOS)
     static var groupedBackground = Color(NSColor.windowBackgroundColor)

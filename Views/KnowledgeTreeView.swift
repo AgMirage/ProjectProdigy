@@ -2,7 +2,8 @@ import SwiftUI
 
 struct KnowledgeTreeView: View {
     
-    @StateObject private var viewModel = KnowledgeTreeViewModel()
+    // --- EDITED: This now gets the single source of truth from the environment. ---
+    @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     @EnvironmentObject var mainViewModel: MainViewModel
     
     var body: some View {
@@ -28,9 +29,7 @@ struct KnowledgeTreeView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .onAppear {
-                viewModel.reinitialize(with: mainViewModel)
-            }
+            // --- REMOVED: The onAppear logic is now handled by the parent MainView. ---
             .sheet(item: $viewModel.branchToSetMastery) { branch in
                 MasteryGoalSheetView(branch: branch)
             }
