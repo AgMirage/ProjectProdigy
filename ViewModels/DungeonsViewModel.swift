@@ -21,13 +21,17 @@ class DungeonsViewModel: ObservableObject {
     /// A flag to signal the view that it should dismiss itself.
     @Published var didStartStage: Bool = false
     
-    // --- EDITED: This is now a weak reference to the MainViewModel. ---
-    private weak var mainViewModel: MainViewModel?
+    // --- EDITED: This is now a strong reference to prevent it from being deallocated. ---
+    private var mainViewModel: MainViewModel
     private weak var missionsViewModel: MissionsViewModel?
 
     init(missionsViewModel: MissionsViewModel, mainViewModel: MainViewModel) {
         self.missionsViewModel = missionsViewModel
         self.mainViewModel = mainViewModel
+    }
+    
+    /// A safe place to initialize the view's data.
+    func loadDungeonData() {
         self.initializeDungeonStatuses()
         self.prepareDisplayData()
     }
@@ -44,16 +48,15 @@ class DungeonsViewModel: ObservableObject {
             return
         }
         
-        // Call the method on MissionsViewModel to create the mission.
         missionsVM.createMission(from: stage, in: dungeonData.dungeon)
         
-        // Set the flag to true to signal the view to close.
         didStartStage = true
     }
     
     /// Creates a default progress status for any dungeon the player hasn't started yet.
     private func initializeDungeonStatuses() {
-        guard var player = mainViewModel?.player else { return }
+        // --- EDITED: References to mainViewModel no longer need to be optional. ---
+        var player = mainViewModel.player
 
         for dungeon in DungeonList.allDungeons {
             if player.dungeonProgress[dungeon.id] == nil {
@@ -64,12 +67,13 @@ class DungeonsViewModel: ObservableObject {
                 )
             }
         }
-        mainViewModel?.player = player
+        mainViewModel.player = player
     }
     
     /// Combines the static dungeon list with the player's progress to create the display data.
     private func prepareDisplayData() {
-        guard let playerProgress = mainViewModel?.player.dungeonProgress else { return }
+        // --- EDITED: References to mainViewModel no longer need to be optional. ---
+        let playerProgress = mainViewModel.player.dungeonProgress
         var displayList: [DungeonDisplayData] = []
         
         for dungeon in DungeonList.allDungeons {
@@ -80,7 +84,4 @@ class DungeonsViewModel: ObservableObject {
         
         self.dungeonsToDisplay = displayList
     }
-    
-    // --- EDITED: This function is no longer needed here, it will be handled in MainViewModel ---
-    // func handleStageCompletion(for completedMission: Mission) { }
 }

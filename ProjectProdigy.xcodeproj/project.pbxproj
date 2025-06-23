@@ -11,6 +11,8 @@
 		6442BD622E0754C500A2B37D /* ArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BD602E0754C500A2B37D /* ArchiveView.swift */; };
 		6442BD642E0755FA00A2B37D /* MissionReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BD632E0755FA00A2B37D /* MissionReviewView.swift */; };
 		6442BD652E0755FA00A2B37D /* MissionReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BD632E0755FA00A2B37D /* MissionReviewView.swift */; };
+		6442BD672E08C45A00A2B37D /* MissionDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BD662E08C45A00A2B37D /* MissionDebugView.swift */; };
+		6442BD682E08C45A00A2B37D /* MissionDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BD662E08C45A00A2B37D /* MissionDebugView.swift */; };
 		64E0BE422DF8F1FA009A67EC /* PlayerData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE412DF8F1E0009A67EC /* PlayerData.swift */; };
 		64E0BE432DF8F1FA009A67EC /* PlayerData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE412DF8F1E0009A67EC /* PlayerData.swift */; };
 		64E0BE4B2DFA1A69009A67EC /* KnowledgeTreeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE4A2DFA1A62009A67EC /* KnowledgeTreeData.swift */; };
@@ -104,6 +106,7 @@
 /* Begin PBXFileReference section */
 		6442BD602E0754C500A2B37D /* ArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveView.swift; sourceTree = "<group>"; };
 		6442BD632E0755FA00A2B37D /* MissionReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionReviewView.swift; sourceTree = "<group>"; };
+		6442BD662E08C45A00A2B37D /* MissionDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionDebugView.swift; sourceTree = "<group>"; };
 		64E0BE132DF8F195009A67EC /* ProjectProdigy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ProjectProdigy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64E0BE242DF8F195009A67EC /* ProjectProdigy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ProjectProdigy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64E0BE412DF8F1E0009A67EC /* PlayerData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerData.swift; sourceTree = "<group>"; };
@@ -160,6 +163,7 @@
 				Assets.xcassets,
 				GameScene.sks,
 				GameScene.swift,
+				ProjectProdigyApp.swift,
 			);
 			target = 64E0BE122DF8F195009A67EC /* ProjectProdigy iOS */;
 		};
@@ -170,6 +174,7 @@
 				Assets.xcassets,
 				GameScene.sks,
 				GameScene.swift,
+				ProjectProdigyApp.swift,
 			);
 			target = 64E0BE232DF8F195009A67EC /* ProjectProdigy macOS */;
 		};
@@ -280,6 +285,7 @@
 		64E0BE462DF907EB009A67EC /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				6442BD662E08C45A00A2B37D /* MissionDebugView.swift */,
 				6442BD632E0755FA00A2B37D /* MissionReviewView.swift */,
 				6442BD602E0754C500A2B37D /* ArchiveView.swift */,
 				64E0BEE62E03722C009A67EC /* StoriesView.swift */,
@@ -428,6 +434,7 @@
 				64E0BEAB2DFA2F58009A67EC /* TitlesView.swift in Sources */,
 				64E0BEB52DFA308E009A67EC /* FountainView.swift in Sources */,
 				64E0BE512DFA1BA3009A67EC /* CharacterCreationViewModel.swift in Sources */,
+				6442BD672E08C45A00A2B37D /* MissionDebugView.swift in Sources */,
 				64E0BEE22E0371B7009A67EC /* StoryData.swift in Sources */,
 				64E0BE822DFA22AA009A67EC /* DailyMissionSettings.swift in Sources */,
 				64E0BEAF2DFA2FEF009A67EC /* GachaData.swift in Sources */,
@@ -481,6 +488,7 @@
 				64E0BEAC2DFA2F58009A67EC /* TitlesView.swift in Sources */,
 				64E0BEB42DFA308E009A67EC /* FountainView.swift in Sources */,
 				64E0BE522DFA1BA3009A67EC /* CharacterCreationViewModel.swift in Sources */,
+				6442BD682E08C45A00A2B37D /* MissionDebugView.swift in Sources */,
 				64E0BEE12E0371B7009A67EC /* StoryData.swift in Sources */,
 				64E0BE812DFA22AA009A67EC /* DailyMissionSettings.swift in Sources */,
 				64E0BEAE2DFA2FEF009A67EC /* GachaData.swift in Sources */,
@@ -596,8 +604,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMainStoryboardFile = Main;
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -624,8 +630,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMainStoryboardFile = Main;
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

@@ -5,71 +5,77 @@ struct MissionsView: View {
     
     @EnvironmentObject var viewModel: MissionsViewModel
     @EnvironmentObject var mainViewModel: MainViewModel
-    // --- ADDED: Get the KnowledgeTreeViewModel from the environment ---
     @EnvironmentObject var knowledgeTreeViewModel: KnowledgeTreeViewModel
 
     var body: some View {
+        #if os(macOS)
+        missionsContent
+        #else
         NavigationStack {
-            VStack {
-                HStack {
-                    Picker("Status", selection: $viewModel.statusFilter) {
-                        Text("All Statuses").tag(nil as MissionStatus?)
-                        ForEach(MissionStatus.allCases, id: \.self) { status in
-                            Text(status.rawValue).tag(status as MissionStatus?)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    
-                    Picker("Source", selection: $viewModel.sourceFilter) {
-                        Text("All Sources").tag(nil as MissionSource?)
-                        // We need MissionSource to be CaseIterable to do this
-                        ForEach([MissionSource.manual, .automatic, .dungeon, .guild], id: \.self) { source in
-                            Text(source.rawValue.capitalized).tag(source as MissionSource?)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-                .padding(.horizontal)
-
-                List {
-                    ForEach(viewModel.filteredAndSortedMissions) { mission in
-                        MissionRowView(mission: mission)
-                    }
-                    .onDelete(perform: viewModel.deleteMission)
-                }
-            }
-            .navigationTitle("Missions")
-            .toolbar {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    NavigationLink {
-                        DungeonsView(missionsViewModel: viewModel, mainViewModel: self.mainViewModel)
-                    } label: { Image(systemName: "shield.lefthalf.filled") }
-                    
-                    NavigationLink {
-                        BossBattleView(mainViewModel: self.mainViewModel)
-                    } label: { Image(systemName: "crown.fill") }
-                    
-                    Button(action: { viewModel.isShowingCreateSheet = true }) { Image(systemName: "plus") }
-                }
-            }
-            // --- EDITED: Sync the knowledge tree state before showing the create sheet ---
-            .sheet(isPresented: $viewModel.isShowingCreateSheet) {
-                CreateMissionView()
-                    .onAppear {
-                        viewModel.knowledgeTree = knowledgeTreeViewModel.subjects
-                    }
-            }
-            .sheet(item: $mainViewModel.missionToReview) { mission in
-                 MissionReviewView(
-                     mission: mission,
-                     missionToReview: $mainViewModel.missionToReview,
-                     onReviewSubmit: { focus, understanding, challenge in
-                         mainViewModel.submitMissionReview(for: mission.id, focus: focus, understanding: understanding, challenge: challenge)
-                         mainViewModel.archiveMission(mission)
-                     }
-                 )
-             }
+            missionsContent
         }
+        #endif
+    }
+    
+    private var missionsContent: some View {
+        VStack {
+            HStack {
+                Picker("Status", selection: $viewModel.statusFilter) {
+                    Text("All Statuses").tag(nil as MissionStatus?)
+                    ForEach(MissionStatus.allCases, id: \.self) { status in
+                        Text(status.rawValue).tag(status as MissionStatus?)
+                    }
+                }
+                .pickerStyle(.menu)
+                
+                Picker("Source", selection: $viewModel.sourceFilter) {
+                    Text("All Sources").tag(nil as MissionSource?)
+                    ForEach([MissionSource.manual, .automatic, .dungeon, .guild], id: \.self) { source in
+                        Text(source.rawValue.capitalized).tag(source as MissionSource?)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+            .padding(.horizontal)
+
+            List {
+                ForEach(viewModel.filteredAndSortedMissions) { mission in
+                    MissionRowView(mission: mission)
+                }
+                .onDelete(perform: viewModel.deleteMission)
+            }
+            .listStyle(.plain)
+        }
+        .navigationTitle("Missions")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                NavigationLink {
+                    DungeonsView(missionsViewModel: viewModel, mainViewModel: self.mainViewModel)
+                } label: { Image(systemName: "shield.lefthalf.filled") }
+                
+                NavigationLink {
+                    BossBattleView(mainViewModel: self.mainViewModel)
+                } label: { Image(systemName: "crown.fill") }
+                
+                Button(action: { viewModel.isShowingCreateSheet = true }) { Image(systemName: "plus") }
+            }
+        }
+        .sheet(isPresented: $viewModel.isShowingCreateSheet) {
+            CreateMissionView()
+                .onAppear {
+                    viewModel.knowledgeTree = knowledgeTreeViewModel.subjects
+                }
+        }
+        .sheet(item: $mainViewModel.missionToReview) { mission in
+             MissionReviewView(
+                 mission: mission,
+                 missionToReview: $mainViewModel.missionToReview,
+                 onReviewSubmit: { focus, understanding, challenge in
+                     mainViewModel.submitMissionReview(for: mission.id, focus: focus, understanding: understanding, challenge: challenge)
+                     mainViewModel.archiveMission(mission)
+                 }
+             )
+         }
     }
 }
 
@@ -120,16 +126,13 @@ struct MissionRowView: View {
                     if !mission.isPomodoro { Text(formatTime(mission.totalDuration)).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(.secondary) }
                 }
             }
-            HStack(spacing: 8) { // --- ADDED spacing for macOS
+            HStack(spacing: 8) {
                 if mission.status == .pending || mission.status == .paused {
-                    // --- EDITED: Changed style to .bordered for better macOS compatibility
                     Button(action: { viewModel.startMission(mission: mission) }) { Label(mission.status == .pending ? "Start" : "Resume", systemImage: "play.fill") }.buttonStyle(.bordered).tint(.green)
                 } else if mission.status == .inProgress {
-                    // --- EDITED: Changed style to .bordered for better macOS compatibility
                     Button(action: { viewModel.pauseMission(mission: mission) }) { Label("Pause", systemImage: "pause.fill") }.buttonStyle(.bordered).tint(.orange)
                 } else if mission.status == .failed {
                     Button(action: {
-                        // The MissionsViewModel will handle creating a new mission from the failed one.
                     }) {
                         Label("Retry", systemImage: "arrow.counterclockwise")
                     }.buttonStyle(.bordered).tint(.orange)
@@ -257,18 +260,5 @@ struct CreateMissionView: View {
     private var createButtonSection: some View {
         let isInvalid = viewModel.selectedSubject == nil || viewModel.selectedBranch == nil || viewModel.selectedTopic == nil || viewModel.selectedStudyType == nil
         return Section { Button("Create Mission") { viewModel.createMission() }.disabled(isInvalid) }
-    }
-}
-
-
-// MARK: - Previews
-struct MissionsView_Previews: PreviewProvider {
-    static var previews: some View {
-        let mainVM = MainViewModel(player: Player(username: "Preview"))
-        let missionsVM = MissionsViewModel(mainViewModel: mainVM)
-        
-        MissionsView()
-            .environmentObject(mainVM)
-            .environmentObject(missionsVM)
     }
 }

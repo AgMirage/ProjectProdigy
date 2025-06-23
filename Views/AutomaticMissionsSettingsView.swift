@@ -1,82 +1,78 @@
 import SwiftUI
 
 struct AutomaticMissionsSettingsView: View {
-    
-    // --- EDITED: This now uses a Binding to a single source of truth ---
+
+    @Environment(\.dismiss) var dismiss
+
     @Binding var settings: DailyMissionSettings
-    
-    // State to manage the hours and minutes for the duration picker
+
     @State private var missionHours: Int = 1
     @State private var missionMinutes: Int = 0
 
     var body: some View {
-        Form {
-            // Section 1: Master Toggle
-            Section {
-                Toggle("Enable Automatic Missions", isOn: $settings.isEnabled.animation())
-            }
-            
-            // The rest of the form is disabled if the feature is turned off
-            if settings.isEnabled {
-                // Section 2: Mission Structure
-                Section(header: Text("Mission Structure")) {
-                    Stepper("Missions per Session: \(settings.missionCount)", value: $settings.missionCount, in: 1...5)
-                    
-                    VStack(alignment: .leading) {
-                        Text("Duration per Mission")
-                        HStack {
-                            Spacer()
-                            Picker("Hours", selection: $missionHours) {
-                                ForEach(0..<5) { Text("\($0) hr").tag($0) }
+        // --- EDITED: Added a NavigationStack for a clean title and Done button ---
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("Enable Automatic Missions", isOn: $settings.isEnabled.animation())
+                }
+
+                if settings.isEnabled {
+                    Section(header: Text("Mission Structure")) {
+                        Stepper("Missions per Session: \(settings.missionCount)", value: $settings.missionCount, in: 1...5)
+                        
+                        LabeledContent("Duration per Mission") {
+                            HStack {
+                                Picker("Hours", selection: $missionHours) {
+                                    ForEach(0..<5) { Text("\($0) hr").tag($0) }
+                                }
+                                .labelsHidden()
+
+                                Picker("Minutes", selection: $missionMinutes) {
+                                    ForEach(0..<60) { Text("\($0) min").tag($0) }
+                                }
+                                .labelsHidden()
                             }
-                            // --- FIXED: '.wheel' is not available on macOS. Changed to '.menu'. ---
                             .pickerStyle(.menu)
-                            
-                            Picker("Minutes", selection: $missionMinutes) {
-                                ForEach(0..<60) { Text("\($0) min").tag($0) }
-                            }
-                            // --- FIXED: '.wheel' is not available on macOS. Changed to '.menu'. ---
-                            .pickerStyle(.menu)
-                            Spacer()
                         }
-                        .frame(height: 120)
+                    }
+
+                    Section(header: Text("Weekly Schedule")) {
+                        WeekdaySelectorView(selectedDays: $settings.studyDays)
                     }
                 }
-                
-                // Section 3: Schedule
-                Section(header: Text("Weekly Schedule")) {
-                    WeekdaySelectorView(selectedDays: $settings.studyDays)
+            }
+            .navigationTitle("Automatic Missions")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
                 }
             }
         }
-        .navigationTitle("Daily Missions")
-        // --- EDITED: State is now updated live via the binding. ---
-        // onDisappear is no longer needed.
         .onAppear(perform: setupInitialState)
-        .onChange(of: missionHours, syncMissionDuration)
-        .onChange(of: missionMinutes, syncMissionDuration)
+        .onChange(of: missionHours) { _, _ in syncMissionDuration() }
+        .onChange(of: missionMinutes) { _, _ in syncMissionDuration() }
     }
-    
-    // MARK: - Helper Functions
-    
+
     private func setupInitialState() {
-        // When the view appears, break the saved TimeInterval into hours and minutes
         let duration = settings.missionDuration
         missionHours = Int(duration) / 3600
         missionMinutes = (Int(duration) % 3600) / 60
     }
-    
-    // --- EDITED: This function now updates the binding whenever the pickers change. ---
+
     private func syncMissionDuration() {
         let durationInSeconds = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
         settings.missionDuration = durationInSeconds
     }
 }
 
-
-// MARK: - Helper View: WeekdaySelector
+// MARK: - Helper Views (Unchanged)
 struct WeekdaySelectorView: View {
-    
     @Binding var selectedDays: Set<Weekday>
     private let allDays = Weekday.allCases.sorted()
 
@@ -106,13 +102,8 @@ struct WeekdaySelectorView: View {
     }
 }
 
-
-// MARK: - Preview
 struct AutomaticMissionsSettingsView_Previews: PreviewProvider {
     static var previews: some View {
-        // --- EDITED: The preview now uses a constant binding. ---
-        NavigationStack {
-            AutomaticMissionsSettingsView(settings: .constant(.default))
-        }
+        AutomaticMissionsSettingsView(settings: .constant(.default))
     }
 }

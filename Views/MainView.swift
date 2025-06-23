@@ -1,11 +1,32 @@
 import SwiftUI
 
-// MARK: - Main App View with TabBar
+fileprivate enum AppTab: String, CaseIterable, Identifiable {
+    case home = "Home"
+    case missions = "Missions"
+    case knowledge = "Knowledge"
+    case community = "Community"
+    case store = "Store"
+    case settings = "Settings"
+    
+    var iconName: String {
+        switch self {
+        case .home: return "house.fill"
+        case .missions: return "list.bullet.clipboard.fill"
+        case .knowledge: return "books.vertical.fill"
+        case .community: return "person.3.fill"
+        case .store: return "cart.fill"
+        case .settings: return "gearshape.fill"
+        }
+    }
+    var id: String { self.rawValue }
+}
+
 struct MainView: View {
     @StateObject private var viewModel: MainViewModel
     @StateObject private var missionsViewModel: MissionsViewModel
-    // --- ADDED: The KnowledgeTreeViewModel is now a StateObject here to persist its state. ---
     @StateObject private var knowledgeTreeViewModel = KnowledgeTreeViewModel()
+    
+    @State private var selectedTab: AppTab = .home
 
     init(player: Player) {
         let mainVM = MainViewModel(player: player)
@@ -14,32 +35,73 @@ struct MainView: View {
     }
 
     var body: some View {
-        TabView {
-            MainDashboardView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
-
-            MissionsView()
-                .tabItem { Label("Missions", systemImage: "list.bullet.clipboard.fill") }
-            
-            KnowledgeTreeView()
-                .tabItem { Label("Knowledge", systemImage: "books.vertical.fill") }
-
-            CommunityView()
-                .tabItem { Label("Community", systemImage: "person.3.fill") }
-            
-            StoreView()
-                .tabItem { Label("Store", systemImage: "cart.fill") }
-            
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+        Group {
+            #if os(macOS)
+            macOSRootView
+            #else
+            iOSTabView
+            #endif
         }
         .environmentObject(viewModel)
         .environmentObject(missionsViewModel)
-        // --- ADDED: Inject the single instance of the viewModel into the environment. ---
         .environmentObject(knowledgeTreeViewModel)
-        // --- ADDED: Initialize the knowledge tree when the main view appears. ---
         .onAppear {
             knowledgeTreeViewModel.reinitialize(with: viewModel)
+        }
+    }
+    
+    private var iOSTabView: some View {
+        TabView(selection: $selectedTab) {
+            ForEach(AppTab.allCases) { tab in
+                viewFor(tab: tab)
+                    .tabItem { Label(tab.rawValue, systemImage: tab.iconName) }
+                    .tag(tab)
+            }
+        }
+    }
+    
+    private var macOSRootView: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                Picker("Select a view", selection: $selectedTab) {
+                    ForEach(AppTab.allCases) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding()
+                
+                Divider()
+
+                // Use a ZStack to keep all views in the hierarchy,
+                // controlling visibility with opacity. This fixes toolbars on macOS.
+                ZStack {
+                    viewFor(tab: .home).opacity(selectedTab == .home ? 1 : 0)
+                    viewFor(tab: .missions).opacity(selectedTab == .missions ? 1 : 0)
+                    viewFor(tab: .knowledge).opacity(selectedTab == .knowledge ? 1 : 0)
+                    viewFor(tab: .community).opacity(selectedTab == .community ? 1 : 0)
+                    viewFor(tab: .store).opacity(selectedTab == .store ? 1 : 0)
+                    viewFor(tab: .settings).opacity(selectedTab == .settings ? 1 : 0)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func viewFor(tab: AppTab) -> some View {
+        switch tab {
+        case .home:
+            MainDashboardView()
+        case .missions:
+            MissionsView()
+        case .knowledge:
+            KnowledgeTreeView()
+        case .community:
+            CommunityView()
+        case .store:
+            StoreView()
+        case .settings:
+            SettingsView()
         }
     }
 }
@@ -47,54 +109,53 @@ struct MainView: View {
 // MARK: - Main Dashboard Screen
 struct MainDashboardView: View {
     @EnvironmentObject var viewModel: MainViewModel
-    @EnvironmentObject var missionsViewModel: MissionsViewModel // Access MissionsViewModel
+    @EnvironmentObject var missionsViewModel: MissionsViewModel
     @State private var isShowingTitlesSheet = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    PlayerHeaderView( player: viewModel.player, onTap: { isShowingTitlesSheet = true })
-                    
-                    StatsGridView(stats: viewModel.player.stats)
-                    
-                    HStack(alignment: .bottom, spacing: 20) {
-                        StreakView(streak: viewModel.player.checkInStreak)
-                        FocusFamiliarView(familiar: viewModel.player.activeFamiliar)
-                        VStack {
-                            Text("Procrastination").font(.caption).bold()
-                            Image("monster_stage_1").resizable().scaledToFit().frame(height: 60)
-                                .scaleEffect(viewModel.procrastinationMonsterScale)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
-                        }
-                        .padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
-                    }
-                    
-                    SystemLogView(logEntries: viewModel.systemLog)
-                    
-                    // --- NEW: Quick Mission Button ---
-                    Button(action: {
-                        missionsViewModel.generateQuickMission()
-                    }) {
-                        Label("Start Quick Mission", systemImage: "wand.and.stars")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.purple)
-                    .padding()
+        #if os(macOS)
+        dashboardContent
+        #else
+        NavigationStack { dashboardContent }
+        #endif
+    }
+    
+    private var dashboardContent: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                PlayerHeaderView( player: viewModel.player, onTap: { isShowingTitlesSheet = true })
+                StatsGridView(stats: viewModel.player.stats)
+                HStack(alignment: .bottom, spacing: 20) {
+                    StreakView(streak: viewModel.player.checkInStreak)
+                    FocusFamiliarView(familiar: viewModel.player.activeFamiliar)
+                    VStack {
+                        Text("Procrastination").font(.caption).bold()
+                        Image("monster_stage_1").resizable().scaledToFit().frame(height: 60)
+                            .scaleEffect(viewModel.procrastinationMonsterScale)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
+                    }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
                 }
+                SystemLogView(logEntries: viewModel.systemLog)
+                Button(action: {
+                    missionsViewModel.generateQuickMission()
+                }) {
+                    Label("Start Quick Mission", systemImage: "wand.and.stars")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
                 .padding()
             }
-            .background(Color.groupedBackground)
-            .navigationTitle("Dashboard")
-            .sheet(isPresented: $isShowingTitlesSheet) { TitlesView() }
+            .padding()
         }
+        .background(Color.groupedBackground)
+        .navigationTitle("Dashboard")
+        .sheet(isPresented: $isShowingTitlesSheet) { TitlesView() }
     }
 }
 
-
-// MARK: - (Existing Helper Views - Unchanged)
+// MARK: - Helper Views (unchanged)
 struct PlayerHeaderView: View {
     let player: Player
     let onTap: () -> Void
@@ -161,13 +222,11 @@ struct StreakView: View {
         }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
     }
 }
-
 struct SystemLogView: View {
     let logEntries: [LogEntry]
     var body: some View {
         VStack(alignment: .leading) {
             Text("System Log").font(.headline).padding([.leading, .top])
-            
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(logEntries) { entry in
                     HStack(alignment: .top) {
@@ -181,25 +240,16 @@ struct SystemLogView: View {
             .padding(10)
             .background(Color.black.opacity(0.9))
             .cornerRadius(8)
-            
         }.padding(.top, 10)
     }
 }
 extension DateFormatter {
     static let logTimeFormatter: DateFormatter = { let formatter = DateFormatter(); formatter.dateFormat = "HH:mm:ss"; return formatter }()
 }
-
-// MARK: - Preview
-struct MainView_Previews: PreviewProvider {
-    static var previews: some View {
-        MainView(player: Player(username: "Prodigy"))
-    }
-}
-
 fileprivate extension Color {
     #if os(macOS)
-    static var groupedBackground = Color(NSColor.windowBackgroundColor)
-    static var secondaryBackground = Color(NSColor.controlBackgroundColor)
+    static var groupedBackground = Color(NSColor.controlBackgroundColor)
+    static var secondaryBackground = Color(NSColor.windowBackgroundColor)
     #else
     static var groupedBackground = Color(.systemGroupedBackground)
     static var secondaryBackground = Color(.secondarySystemGroupedBackground)

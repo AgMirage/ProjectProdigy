@@ -1,11 +1,3 @@
-//
-//  BossBattleView.swift
-//  ProjectProdigy
-//
-//  Created by Kaia Quinn on 6/11/25.
-//
-
-
 import SwiftUI
 
 struct BossBattleView: View {
@@ -21,15 +13,12 @@ struct BossBattleView: View {
         NavigationStack {
             VStack {
                 if let battle = viewModel.activeBossBattle {
-                    // --- Active Battle View ---
                     ActiveBossBattleView(battle: battle)
                 } else {
-                    // --- Creation Form View ---
                     CreateBossBattleView()
                 }
             }
             .navigationTitle("Boss Battles")
-            // --- FIXED: Replaced iOS-specific color with a cross-platform one. ---
             .background(Color.groupedBackground)
             .alert(item: $viewModel.alertItem) { alert in
                 Alert(title: Text(alert.title), message: Text(alert.message), dismissButton: .default(Text("OK")))
@@ -49,7 +38,6 @@ struct CreateBossBattleView: View {
             Section(header: Text("Declare a New Battle")) {
                 TextField("Event Name (e.g., CHEM 201 Final)", text: $viewModel.battleName)
                 TextField("Gold Wager", text: $viewModel.wagerAmount)
-                    // --- FIXED: keyboardType is unavailable on macOS. Wrapped for iOS only. ---
                     #if os(iOS)
                     .keyboardType(.numberPad)
                     #endif
@@ -63,6 +51,9 @@ struct CreateBossBattleView: View {
                 }
                 .disabled(viewModel.battleName.isEmpty || viewModel.wagerAmount.isEmpty)
             }
+            
+            // --- ADDED: Spacer to push the form content to the top ---
+            Spacer()
         }
     }
 }
@@ -132,7 +123,7 @@ struct BossBattleView_Previews: PreviewProvider {
 }
 
 
-// MARK: - Cross-Platform Color Helpers (NEW)
+// MARK: - Cross-Platform Color Helpers
 fileprivate extension Color {
     #if os(macOS)
     static var groupedBackground = Color(NSColor.windowBackgroundColor)

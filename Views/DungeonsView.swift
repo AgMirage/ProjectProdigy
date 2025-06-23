@@ -10,7 +10,9 @@ struct DungeonsView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        // --- EDITED: Removed the unnecessary NavigationStack ---
+        // A toolbar is added to provide a title and a Done button.
+        VStack {
             ScrollView {
                 LazyVStack(spacing: 15) {
                     ForEach(viewModel.dungeonsToDisplay) { dungeonData in
@@ -19,15 +21,28 @@ struct DungeonsView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Dungeons")
-            // --- FIXED: Replaced iOS-specific color with a cross-platform one. ---
-            .background(Color.groupedBackground)
-            .onChange(of: viewModel.didStartStage) {
-                if viewModel.didStartStage {
+        }
+        .navigationTitle("Dungeons")
+        .background(Color.groupedBackground)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
                     dismiss()
                 }
             }
         }
+        .onChange(of: viewModel.didStartStage) {
+            if viewModel.didStartStage {
+                dismiss()
+            }
+        }
+        .onAppear {
+            viewModel.loadDungeonData()
+        }
+        // --- EDITED: Give the sheet a sensible default size on macOS ---
+        #if os(macOS)
+        .frame(minWidth: 500, minHeight: 400)
+        #endif
         .environmentObject(viewModel)
     }
 }
@@ -100,7 +115,6 @@ struct DungeonRowView: View {
             }
         }
         .padding()
-        // --- FIXED: Replaced iOS-specific color with a cross-platform one. ---
         .background(Color.secondaryBackground)
         .cornerRadius(12)
         .opacity(dungeonData.status.isCompleted ? 0.6 : 1.0)
@@ -111,14 +125,13 @@ struct DungeonRowView: View {
 // MARK: - Preview
 struct DungeonsView_Previews: PreviewProvider {
     static var previews: some View {
-        // --- FIXED: Added the required mainViewModel parameter ---
         let mainVM = MainViewModel(player: Player(username: "Preview"))
         let missionsVM = MissionsViewModel(mainViewModel: mainVM)
         DungeonsView(missionsViewModel: missionsVM, mainViewModel: mainVM)
     }
 }
 
-// MARK: - Cross-Platform Color Helpers (NEW)
+// MARK: - Cross-Platform Color Helpers
 fileprivate extension Color {
     #if os(macOS)
     static var groupedBackground = Color(NSColor.windowBackgroundColor)
