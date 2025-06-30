@@ -1,7 +1,6 @@
 import Foundation
 
 /// Represents the days of the week for scheduling.
-/// Codable allows it to be saved, and CaseIterable allows us to list all days easily in the UI.
 enum Weekday: Int, Codable, CaseIterable, Comparable {
     case sunday = 1, monday = 2, tuesday = 3, wednesday = 4, thursday = 5, friday = 6, saturday = 7
     
@@ -17,7 +16,6 @@ enum Weekday: Int, Codable, CaseIterable, Comparable {
         }
     }
     
-    // Conformance to Comparable to allow sorting
     static func < (lhs: Weekday, rhs: Weekday) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
@@ -44,6 +42,13 @@ struct DailyMissionSettings: Codable {
     /// The date when missions were last generated, to prevent creating duplicates in the same day.
     var lastGenerationDate: Date?
     
+    // --- NEW: Customizable Pomodoro Durations ---
+    /// The duration of a Pomodoro study cycle (in seconds).
+    var pomodoroStudyDuration: TimeInterval
+    
+    /// The duration of a Pomodoro break cycle (in seconds).
+    var pomodoroBreakDuration: TimeInterval
+    
     /// Provides a default set of settings for a new user.
     static var `default`: DailyMissionSettings {
         DailyMissionSettings(
@@ -52,13 +57,9 @@ struct DailyMissionSettings: Codable {
             missionDuration: 2700, // Default to 45 minutes
             studyDays: [.monday, .tuesday, .wednesday, .thursday, .friday], // Default to weekdays
             targetSubjectNames: nil,
-            lastGenerationDate: nil
+            lastGenerationDate: nil,
+            pomodoroStudyDuration: 25 * 60, // Default to 25 minutes
+            pomodoroBreakDuration: 5 * 60  // Default to 5 minutes
         )
     }
-}//
-//  DailyMissionSettings.swift
-//  ProjectProdigy
-//
-//  Created by Kaia Quinn on 6/11/25.
-//
-
+}

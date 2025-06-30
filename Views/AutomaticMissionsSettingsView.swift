@@ -1,24 +1,28 @@
 import SwiftUI
 
-struct AutomaticMissionsSettingsView: View {
+// --- EDITED: Renamed view for clarity ---
+struct TimerSettingsView: View {
 
     @Environment(\.dismiss) var dismiss
 
     @Binding var settings: DailyMissionSettings
 
+    // --- EDITED: State for Pomodoro pickers ---
+    @State private var pomodoroStudyMinutes: Int = 25
+    @State private var pomodoroBreakMinutes: Int = 5
+    
     @State private var missionHours: Int = 1
     @State private var missionMinutes: Int = 0
 
     var body: some View {
-        // --- EDITED: Added a NavigationStack for a clean title and Done button ---
         NavigationStack {
             Form {
-                Section {
+                Section(header: Text("Automatic Daily Missions")) {
                     Toggle("Enable Automatic Missions", isOn: $settings.isEnabled.animation())
                 }
 
                 if settings.isEnabled {
-                    Section(header: Text("Mission Structure")) {
+                    Section(header: Text("Automation Structure")) {
                         Stepper("Missions per Session: \(settings.missionCount)", value: $settings.missionCount, in: 1...5)
                         
                         LabeledContent("Duration per Mission") {
@@ -37,12 +41,19 @@ struct AutomaticMissionsSettingsView: View {
                         }
                     }
 
-                    Section(header: Text("Weekly Schedule")) {
+                    Section(header: Text("Automation Schedule")) {
                         WeekdaySelectorView(selectedDays: $settings.studyDays)
                     }
                 }
+                
+                // --- NEW: Section for Pomodoro Settings ---
+                Section(header: Text("Pomodoro Timer Settings")) {
+                    Stepper("Study Duration: \(pomodoroStudyMinutes) min", value: $pomodoroStudyMinutes, in: 5...90, step: 5)
+                    
+                    Stepper("Break Duration: \(pomodoroBreakMinutes) min", value: $pomodoroBreakMinutes, in: 1...30, step: 1)
+                }
             }
-            .navigationTitle("Automatic Missions")
+            .navigationTitle("Automation & Timers")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -57,17 +68,31 @@ struct AutomaticMissionsSettingsView: View {
         .onAppear(perform: setupInitialState)
         .onChange(of: missionHours) { _, _ in syncMissionDuration() }
         .onChange(of: missionMinutes) { _, _ in syncMissionDuration() }
+        // --- NEW: Sync changes from the new steppers ---
+        .onChange(of: pomodoroStudyMinutes) { _, _ in syncPomodoroDurations() }
+        .onChange(of: pomodoroBreakMinutes) { _, _ in syncPomodoroDurations() }
     }
 
     private func setupInitialState() {
+        // For automatic missions
         let duration = settings.missionDuration
         missionHours = Int(duration) / 3600
         missionMinutes = (Int(duration) % 3600) / 60
+        
+        // For pomodoro
+        pomodoroStudyMinutes = Int(settings.pomodoroStudyDuration) / 60
+        pomodoroBreakMinutes = Int(settings.pomodoroBreakDuration) / 60
     }
 
     private func syncMissionDuration() {
         let durationInSeconds = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
         settings.missionDuration = durationInSeconds
+    }
+    
+    // --- NEW: Function to save Pomodoro settings ---
+    private func syncPomodoroDurations() {
+        settings.pomodoroStudyDuration = TimeInterval(pomodoroStudyMinutes * 60)
+        settings.pomodoroBreakDuration = TimeInterval(pomodoroBreakMinutes * 60)
     }
 }
 
@@ -102,8 +127,8 @@ struct WeekdaySelectorView: View {
     }
 }
 
-struct AutomaticMissionsSettingsView_Previews: PreviewProvider {
+struct TimerSettingsView_Previews: PreviewProvider {
     static var previews: some View {
-        AutomaticMissionsSettingsView(settings: .constant(.default))
+        TimerSettingsView(settings: .constant(.default))
     }
 }

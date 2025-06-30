@@ -9,11 +9,9 @@ class MissionsViewModel: ObservableObject {
     @Published var activeMissions: [Mission] = []
     @Published var isShowingCreateSheet = false
     
-    // Filter State Properties
     @Published var statusFilter: MissionStatus? = nil
     @Published var sourceFilter: MissionSource? = nil
     
-    // Form Properties
     @Published var selectedSubject: Subject?
     @Published var selectedBranch: KnowledgeBranch?
     @Published var selectedTopic: KnowledgeTopic?
@@ -25,6 +23,16 @@ class MissionsViewModel: ObservableObject {
 
     @Published var dailyMissionSettings = DailyMissionSettings.default
 
+    var canEnablePomodoro: Bool {
+        let totalDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
+        return totalDuration >= dailyMissionSettings.pomodoroStudyDuration
+    }
+    
+    var pomodoroRequirementMessage: String {
+        let requiredMinutes = Int(dailyMissionSettings.pomodoroStudyDuration / 60)
+        return "Mission must be at least \(requiredMinutes) minutes to use Pomodoro mode."
+    }
+    
     var filteredAndSortedMissions: [Mission] {
         var missions = activeMissions
 
@@ -54,10 +62,7 @@ class MissionsViewModel: ObservableObject {
     
     private var timer: AnyCancellable?
     private weak var mainViewModel: MainViewModel?
-
-    private let pomodoroStudyDuration: TimeInterval = 25 * 60
-    private let pomodoroBreakDuration: TimeInterval = 5 * 60
-
+    
     // MARK: - Initialization
     
     init(mainViewModel: MainViewModel) {
@@ -116,7 +121,7 @@ class MissionsViewModel: ObservableObject {
               let player = mainViewModel?.player else { return }
         
         let totalDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
-        let initialTimeRemaining = isPomodoroEnabled ? pomodoroStudyDuration : totalDuration
+        let initialTimeRemaining = totalDuration
         
         let rewards = calculateRewards(
             for: subject,
@@ -180,9 +185,11 @@ class MissionsViewModel: ObservableObject {
     func startMission(mission: Mission) {
         stopAllMissions()
         
-        if mission.isPomodoro && mission.pomodoroCycle == 0 {
-            mission.pomodoroCycle = 1
-            mission.timeRemaining = pomodoroStudyDuration
+        if mission.isPomodoro {
+            mission.timeRemaining = min(mission.totalDuration, dailyMissionSettings.pomodoroStudyDuration)
+            if mission.pomodoroCycle == 0 {
+                mission.pomodoroCycle = 1
+            }
         }
         
         mission.status = .inProgress
@@ -206,12 +213,13 @@ class MissionsViewModel: ObservableObject {
     func retryMission(mission: Mission) {
         mission.status = .pending
         if mission.isPomodoro {
-            mission.timeRemaining = pomodoroStudyDuration
-            mission.pomodoroCycle = 0
-            mission.isBreakTime = false
+            let customStudyDuration = dailyMissionSettings.pomodoroStudyDuration
+            mission.timeRemaining = min(mission.totalDuration, customStudyDuration)
         } else {
             mission.timeRemaining = mission.totalDuration
         }
+        mission.pomodoroCycle = 0
+        mission.isBreakTime = false
     }
     
     func deleteMission(at offsets: IndexSet) {
@@ -220,7 +228,6 @@ class MissionsViewModel: ObservableObject {
     
     func togglePin(for mission: Mission) {
         mission.isPinned.toggle()
-        // Manually re-sort the array to reflect the change
         activeMissions.sort {
             if $0.isPinned != $1.isPinned { return $0.isPinned && !$1.isPinned }
             return $0.creationDate > $1.creationDate
@@ -238,33 +245,38 @@ class MissionsViewModel: ObservableObject {
         }
     }
     
-    // --- EDITED: Simplified timer logic now that Mission is a class ---
     private func updateTimer() {
         guard let mission = activeMissions.first(where: { $0.status == .inProgress }) else {
             timer?.cancel()
             return
         }
 
+        // --- EDITED: Removed the line that incorrectly mutated totalDuration ---
         if mission.timeRemaining > 0 {
             mission.timeRemaining -= 1
+        }
+        
+        guard mission.timeRemaining <= 0 else {
             return
         }
 
-        // Timer reached zero
         if mission.isPomodoro {
             if mission.isBreakTime {
                 mission.isBreakTime = false
                 mission.pomodoroCycle += 1
-                mission.timeRemaining = pomodoroStudyDuration
+                
+                let remainingTotalDuration = mission.totalDuration - (Double(mission.pomodoroCycle - 1) * dailyMissionSettings.pomodoroStudyDuration)
+                mission.timeRemaining = min(remainingTotalDuration, dailyMissionSettings.pomodoroStudyDuration)
+
                 mainViewModel?.addLogEntry("Break's over! Starting Focus Cycle \(mission.pomodoroCycle).", color: .green)
                 mainViewModel?.setActiveMission(mission)
             } else {
-                let totalStudyTimeSoFar = Double(mission.pomodoroCycle) * pomodoroStudyDuration
-                if totalStudyTimeSoFar >= mission.totalDuration {
+                let totalStudyTimeCompleted = Double(mission.pomodoroCycle) * dailyMissionSettings.pomodoroStudyDuration
+                if totalStudyTimeCompleted >= mission.totalDuration {
                     completeMission(mission: mission)
                 } else {
                     mission.isBreakTime = true
-                    mission.timeRemaining = pomodoroBreakDuration
+                    mission.timeRemaining = dailyMissionSettings.pomodoroBreakDuration
                     mainViewModel?.addLogEntry("Focus Cycle complete! Time for a short break.", color: .blue)
                     mainViewModel?.pauseActiveMission()
                 }

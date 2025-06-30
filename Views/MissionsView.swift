@@ -81,12 +81,9 @@ struct MissionsView: View {
 
 // MARK: - Mission Row View
 struct MissionRowView: View {
-    // --- EDITED: Changed from let to @ObservedObject ---
     @ObservedObject var mission: Mission
     
     @EnvironmentObject var viewModel: MissionsViewModel
-    private let pomodoroStudyDuration: TimeInterval = 25 * 60
-    private let pomodoroBreakDuration: TimeInterval = 5 * 60
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -125,7 +122,7 @@ struct MissionRowView: View {
                 HStack {
                     Text(formatTime(mission.timeRemaining)).font(.system(size: 36, weight: .bold, design: .monospaced))
                     Spacer()
-                    if !mission.isPomodoro { Text(formatTime(mission.totalDuration)).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(.secondary) }
+                    Text(formatTime(mission.totalDuration)).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(.secondary)
                 }
             }
             
@@ -179,8 +176,8 @@ struct MissionRowView: View {
     
     private var progressValue: Double {
         if mission.isPomodoro {
-            let total = mission.isBreakTime ? pomodoroBreakDuration : pomodoroStudyDuration
-            return total - mission.timeRemaining
+            let cycleDuration = mission.isBreakTime ? viewModel.dailyMissionSettings.pomodoroBreakDuration : viewModel.dailyMissionSettings.pomodoroStudyDuration
+            return cycleDuration - mission.timeRemaining
         } else {
             return mission.totalDuration - mission.timeRemaining
         }
@@ -188,15 +185,17 @@ struct MissionRowView: View {
     
     private var progressTotal: Double {
         if mission.isPomodoro {
-            return mission.isBreakTime ? pomodoroBreakDuration : pomodoroStudyDuration
+            return mission.isBreakTime ? viewModel.dailyMissionSettings.pomodoroBreakDuration : viewModel.dailyMissionSettings.pomodoroStudyDuration
         } else {
             return mission.totalDuration
         }
     }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {
-        let minutes = Int(timeInterval) / 60
-        let seconds = Int(timeInterval) % 60
+        let totalSeconds = Int(timeInterval)
+        guard totalSeconds > 0 else { return "00:00" }
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
     }
 }
@@ -241,6 +240,9 @@ struct CreateMissionView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            // --- NEW: Automatically disable Pomodoro if duration is too short ---
+            .onChange(of: viewModel.missionHours) { _, _ in checkPomodoroEligibility() }
+            .onChange(of: viewModel.missionMinutes) { _, _ in checkPomodoroEligibility() }
         }
     }
     
@@ -272,13 +274,11 @@ struct CreateMissionView: View {
     }
     
     private var detailsSection: some View {
-        Section(header: Text("Mission Details"), footer: Text("Pomodoro breaks your session into focused work intervals (25 min) and short breaks (5 min).")) {
+        Section(header: Text("Mission Details")) {
             Picker("Study Type", selection: $viewModel.selectedStudyType) {
                 Text("Select Study Type...").tag(nil as StudyType?)
                 ForEach(viewModel.availableStudyTypes, id: \.self) { Text($0.displayString).tag($0 as StudyType?) }
             }.disabled(viewModel.selectedSubject == nil)
-            
-            Toggle("Enable Pomodoro Mode", isOn: $viewModel.isPomodoroEnabled)
             
             HStack {
                 Text("Duration")
@@ -286,11 +286,29 @@ struct CreateMissionView: View {
                 Picker("Hours", selection: $viewModel.missionHours) { ForEach(0..<24) { Text("\($0) hr").tag($0) } }.pickerStyle(.menu)
                 Picker("Minutes", selection: $viewModel.missionMinutes) { ForEach(0..<60) { Text("\($0) min").tag($0) } }.pickerStyle(.menu)
             }
+            
+            // --- EDITED: Added disabled logic and feedback text ---
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("Enable Pomodoro Mode", isOn: $viewModel.isPomodoroEnabled)
+                    .disabled(!viewModel.canEnablePomodoro)
+                
+                if !viewModel.canEnablePomodoro {
+                    Text(viewModel.pomodoroRequirementMessage)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
         }
     }
     
     private var createButtonSection: some View {
         let isInvalid = viewModel.selectedSubject == nil || viewModel.selectedBranch == nil || viewModel.selectedTopic == nil || viewModel.selectedStudyType == nil
         return Section { Button("Create Mission") { viewModel.createMission() }.disabled(isInvalid) }
+    }
+    
+    private func checkPomodoroEligibility() {
+        if !viewModel.canEnablePomodoro {
+            viewModel.isPomodoroEnabled = false
+        }
     }
 }

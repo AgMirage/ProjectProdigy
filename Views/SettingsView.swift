@@ -6,8 +6,8 @@ struct SettingsView: View {
     @EnvironmentObject var mainViewModel: MainViewModel
     @EnvironmentObject var missionsViewModel: MissionsViewModel
 
-    // State to control the presentation of the settings sheet
-    @State private var isShowingAutomationSettings = false
+    // --- EDITED: Renamed state variable for clarity ---
+    @State private var isShowingTimerSettings = false
 
     var body: some View {
         #if os(macOS)
@@ -32,10 +32,10 @@ struct SettingsView: View {
                 }
             }
             
-            Section(header: Text("Automation")) {
-                // --- EDITED: Changed from NavigationLink to a Button that triggers the sheet ---
-                Button("Automatic Daily Missions") {
-                    isShowingAutomationSettings = true
+            // --- EDITED: Updated section to reflect new purpose ---
+            Section(header: Text("Automation & Timers")) {
+                Button("Mission & Timer Settings") {
+                    isShowingTimerSettings = true
                 }
             }
             
@@ -67,9 +67,9 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
-        .sheet(isPresented: $isShowingAutomationSettings) {
-            // The sheet presents our AutomaticMissionsSettingsView
-            AutomaticMissionsSettingsView(settings: $missionsViewModel.dailyMissionSettings)
+        .sheet(isPresented: $isShowingTimerSettings) {
+            // --- EDITED: Present the renamed view ---
+            TimerSettingsView(settings: $missionsViewModel.dailyMissionSettings)
         }
         .alert("Are you absolutely sure?", isPresented: $viewModel.isShowingResetAlert) {
             Button("Cancel", role: .cancel) { }
