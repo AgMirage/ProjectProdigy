@@ -81,7 +81,9 @@ struct MissionsView: View {
 
 // MARK: - Mission Row View
 struct MissionRowView: View {
-    let mission: Mission
+    // --- EDITED: Changed from let to @ObservedObject ---
+    @ObservedObject var mission: Mission
+    
     @EnvironmentObject var viewModel: MissionsViewModel
     private let pomodoroStudyDuration: TimeInterval = 25 * 60
     private let pomodoroBreakDuration: TimeInterval = 5 * 60
@@ -126,22 +128,52 @@ struct MissionRowView: View {
                     if !mission.isPomodoro { Text(formatTime(mission.totalDuration)).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(.secondary) }
                 }
             }
+            
             HStack(spacing: 8) {
-                if mission.status == .pending || mission.status == .paused {
-                    Button(action: { viewModel.startMission(mission: mission) }) { Label(mission.status == .pending ? "Start" : "Resume", systemImage: "play.fill") }.buttonStyle(.bordered).tint(.green)
-                } else if mission.status == .inProgress {
-                    Button(action: { viewModel.pauseMission(mission: mission) }) { Label("Pause", systemImage: "pause.fill") }.buttonStyle(.bordered).tint(.orange)
-                } else if mission.status == .failed {
-                    Button(action: {
-                    }) {
-                        Label("Retry", systemImage: "arrow.counterclockwise")
-                    }.buttonStyle(.bordered).tint(.orange)
+                switch mission.status {
+                case .pending:
+                    Button(action: { viewModel.startMission(mission: mission) }) {
+                        Label("Start", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.green)
+                    
+                case .paused:
+                    Button(action: { viewModel.startMission(mission: mission) }) {
+                        Label("Resume", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent).tint(.green)
+                    
+                    Button(action: { viewModel.completeMission(mission: mission) }) {
+                        Label("Complete", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.bordered).tint(.blue)
+
+                case .inProgress:
+                    Button(action: { viewModel.pauseMission(mission: mission) }) {
+                        Label("Pause", systemImage: "pause.fill")
+                    }
+                    .buttonStyle(.borderedProminent).tint(.orange)
+                    
+                    Button(action: { viewModel.completeMission(mission: mission) }) {
+                        Label("Complete", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.bordered).tint(.blue)
+
+                case .failed:
+                    Button(action: { viewModel.retryMission(mission: mission) }) {
+                        Label("Retry", systemImage: "arrow.counterclockwise").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.orange)
+                
+                case .completed:
+                    Text("Completed")
+                        .font(.headline.bold())
+                        .foregroundColor(.green)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
-                Spacer()
-                if mission.status == .inProgress || mission.status == .paused {
-                    Button(action: { viewModel.completeMission(mission: mission) }) { Label("Complete", systemImage: "checkmark") }.buttonStyle(.bordered).tint(.blue)
-                }
-            }.padding(.top, 5)
+            }
+            .padding(.top, 5)
+
         }.padding(.vertical, 10)
     }
     

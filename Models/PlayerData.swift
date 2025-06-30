@@ -1,9 +1,9 @@
 import Foundation
 import SwiftUI
 
-// MARK: - NEW: Mastery Level
+// MARK: - Mastery Level
 /// Represents the mastery goal set by the player for a specific branch.
-enum MasteryLevel: String, Codable, CaseIterable {
+enum MasteryLevel: String, Codable, CaseIterable, Comparable {
     case standard = "Standard"
     case proficient = "Proficient"
     case mastery = "Mastery"
@@ -16,7 +16,17 @@ enum MasteryLevel: String, Codable, CaseIterable {
         case .mastery: return 1.50
         }
     }
+    
+    static func < (lhs: MasteryLevel, rhs: MasteryLevel) -> Bool {
+        let allLevels = MasteryLevel.allCases
+        guard let lhsIndex = allLevels.firstIndex(of: lhs),
+              let rhsIndex = allLevels.firstIndex(of: rhs) else {
+            return false
+        }
+        return lhsIndex < rhsIndex
+    }
 }
+
 
 /// Stores the player-specific mastery choice for a single knowledge branch.
 struct PlayerBranchMastery: Codable, Hashable {
@@ -97,8 +107,14 @@ struct Player {
     var branchMasteryLevels: [String: PlayerBranchMastery]
     var dungeonProgress: [String: PlayerDungeonStatus]
     
-    // --- NEW: Mission Archive ---
     var archivedMissions: [Mission]
+    var permanentXpBoosts: [String: Double]
+
+    // --- NEW: Computed Property ---
+    /// Calculates the number of completed missions from the archive.
+    var completedMissionsCount: Int {
+        archivedMissions.filter { $0.status == .completed }.count
+    }
 
 
     init(username: String) {
@@ -128,7 +144,8 @@ struct Player {
         self.isCollegeLevel = false
         self.branchMasteryLevels = [:]
         self.dungeonProgress = [:]
-        self.archivedMissions = [] // Initialize as empty
+        self.archivedMissions = []
+        self.permanentXpBoosts = [:]
         
         self.academicTier = .foundationalApprentice
         self.stats = .default

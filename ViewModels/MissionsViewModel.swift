@@ -23,7 +23,6 @@ class MissionsViewModel: ObservableObject {
     @Published var isPomodoroEnabled: Bool = false
     @Published var scheduledDate: Date?
 
-    // --- EDITED: This is now a published property to be shared with the Settings view. ---
     @Published var dailyMissionSettings = DailyMissionSettings.default
 
     var filteredAndSortedMissions: [Mission] {
@@ -127,15 +126,13 @@ class MissionsViewModel: ObservableObject {
             player: player
         )
         
-        var newMission = Mission(id: UUID(), subjectName: subject.name, branchName: branch.name, topicName: topic.name, studyType: studyType, creationDate: Date(), totalDuration: totalDuration, timeRemaining: initialTimeRemaining, status: .pending, isPomodoro: isPomodoroEnabled, xpReward: rewards.xp, goldReward: rewards.gold)
-        newMission.scheduledDate = self.scheduledDate
+        let newMission = Mission(id: UUID(), subjectName: subject.name, branchName: branch.name, topicName: topic.name, studyType: studyType, creationDate: Date(), scheduledDate: self.scheduledDate, totalDuration: totalDuration, timeRemaining: initialTimeRemaining, status: .pending, isPomodoro: isPomodoroEnabled, xpReward: rewards.xp, goldReward: rewards.gold)
         
         activeMissions.append(newMission)
         isShowingCreateSheet = false
         resetForm()
     }
     
-    /// --- NEW: Quick Mission Generation ---
     func generateQuickMission() {
         guard let player = mainViewModel?.player,
               let (topic, branchName, subjectName) = findRandomUnlockedTopic(in: knowledgeTree) else {
@@ -143,7 +140,7 @@ class MissionsViewModel: ObservableObject {
             return
         }
         
-        let duration: TimeInterval = 600 // 10 minutes
+        let duration: TimeInterval = 600
         let subject = knowledgeTree.first(where: { $0.name == subjectName })!
         let branch = subject.branches.first(where: { $0.name == branchName })!
         
@@ -154,14 +151,14 @@ class MissionsViewModel: ObservableObject {
             subjectName: subjectName,
             branchName: branchName,
             topicName: topic.name,
-            studyType: .reviewingNotes, // Default to a simple type
+            studyType: .reviewingNotes,
             creationDate: Date(),
             totalDuration: duration,
             timeRemaining: duration,
             status: .pending,
             xpReward: rewards.xp,
             goldReward: rewards.gold,
-            source: .automatic // Using automatic for now, could be its own source
+            source: .automatic
         )
         
         activeMissions.insert(quickMission, at: 0)
@@ -181,36 +178,21 @@ class MissionsViewModel: ObservableObject {
     }
     
     func startMission(mission: Mission) {
-        guard let index = activeMissions.firstIndex(where: { $0.id == mission.id }) else { return }
         stopAllMissions()
         
-        var missionToStart = activeMissions[index]
-        missionToStart.allowedPauseTime = missionToStart.totalDuration * 0.1
-        activeMissions[index] = missionToStart
-        
-        if activeMissions[index].isPomodoro {
-            if activeMissions[index].pomodoroCycle == 0 {
-                activeMissions[index].pomodoroCycle = 1
-                activeMissions[index].timeRemaining = pomodoroStudyDuration
-            }
+        if mission.isPomodoro && mission.pomodoroCycle == 0 {
+            mission.pomodoroCycle = 1
+            mission.timeRemaining = pomodoroStudyDuration
         }
         
-        activeMissions[index].status = .inProgress
-        mainViewModel?.setActiveMission(activeMissions[index])
+        mission.status = .inProgress
+        mainViewModel?.setActiveMission(mission)
         
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.updateTimer() }
     }
     
     func pauseMission(mission: Mission) {
-        guard let index = activeMissions.firstIndex(where: { $0.id == mission.id }) else { return }
-        
-        var missionToPause = activeMissions[index]
-        if let allowedTime = missionToPause.allowedPauseTime, missionToPause.timePaused < allowedTime {
-             // Future logic can go here
-        }
-        missionToPause.status = .paused
-        activeMissions[index] = missionToPause
-        
+        mission.status = .paused
         mainViewModel?.pauseActiveMission()
         timer?.cancel()
     }
@@ -221,13 +203,28 @@ class MissionsViewModel: ObservableObject {
         activeMissions.removeAll { $0.id == mission.id }
     }
     
+    func retryMission(mission: Mission) {
+        mission.status = .pending
+        if mission.isPomodoro {
+            mission.timeRemaining = pomodoroStudyDuration
+            mission.pomodoroCycle = 0
+            mission.isBreakTime = false
+        } else {
+            mission.timeRemaining = mission.totalDuration
+        }
+    }
+    
     func deleteMission(at offsets: IndexSet) {
         activeMissions.remove(atOffsets: offsets)
     }
     
     func togglePin(for mission: Mission) {
-        guard let index = activeMissions.firstIndex(where: { $0.id == mission.id }) else { return }
-        activeMissions[index].isPinned.toggle()
+        mission.isPinned.toggle()
+        // Manually re-sort the array to reflect the change
+        activeMissions.sort {
+            if $0.isPinned != $1.isPinned { return $0.isPinned && !$1.isPinned }
+            return $0.creationDate > $1.creationDate
+        }
     }
 
     func resetForm() {
@@ -236,56 +233,47 @@ class MissionsViewModel: ObservableObject {
     
     private func stopAllMissions() {
         timer?.cancel()
-        for i in 0..<activeMissions.count { if activeMissions[i].status == .inProgress { activeMissions[i].status = .paused } }
+        for mission in activeMissions where mission.status == .inProgress {
+            mission.status = .paused
+        }
     }
     
+    // --- EDITED: Simplified timer logic now that Mission is a class ---
     private func updateTimer() {
-        guard let activeIndex = activeMissions.firstIndex(where: { $0.status == .inProgress }) else {
+        guard let mission = activeMissions.first(where: { $0.status == .inProgress }) else {
             timer?.cancel()
             return
         }
-        
-        if activeMissions[activeIndex].status == .paused {
-            activeMissions[activeIndex].timePaused += 1
+
+        if mission.timeRemaining > 0 {
+            mission.timeRemaining -= 1
             return
         }
-        
-        if activeMissions[activeIndex].timeRemaining > 0 {
-            activeMissions[activeIndex].timeRemaining -= 1
-        }
-        
-        guard activeMissions[activeIndex].timeRemaining <= 0 else { return }
-            
-        var mission = activeMissions[activeIndex]
-        
+
+        // Timer reached zero
         if mission.isPomodoro {
             if mission.isBreakTime {
-                mission.isBreakTime = false; mission.pomodoroCycle += 1; mission.timeRemaining = pomodoroStudyDuration
+                mission.isBreakTime = false
+                mission.pomodoroCycle += 1
+                mission.timeRemaining = pomodoroStudyDuration
                 mainViewModel?.addLogEntry("Break's over! Starting Focus Cycle \(mission.pomodoroCycle).", color: .green)
                 mainViewModel?.setActiveMission(mission)
             } else {
                 let totalStudyTimeSoFar = Double(mission.pomodoroCycle) * pomodoroStudyDuration
                 if totalStudyTimeSoFar >= mission.totalDuration {
-                    completeMission(mission: mission); return
+                    completeMission(mission: mission)
                 } else {
-                    mission.isBreakTime = true; mission.timeRemaining = pomodoroBreakDuration
+                    mission.isBreakTime = true
+                    mission.timeRemaining = pomodoroBreakDuration
                     mainViewModel?.addLogEntry("Focus Cycle complete! Time for a short break.", color: .blue)
                     mainViewModel?.pauseActiveMission()
                 }
             }
-            activeMissions[activeIndex] = mission
         } else {
-            if mission.timeRemaining <= 0 {
-                activeMissions[activeIndex].status = .failed
-                mainViewModel?.addLogEntry("Mission Failed: \(mission.topicName)", color: .red)
-                timer?.cancel()
-            } else {
-                completeMission(mission: activeMissions[activeIndex])
-            }
+            completeMission(mission: mission)
         }
     }
     
-    /// Finds a random, unlocked topic from the entire knowledge tree.
     private func findRandomUnlockedTopic(in tree: [Subject]) -> (topic: KnowledgeTopic, branchName: String, subjectName: String)? {
         let allUnlockedBranches = tree.flatMap { subject in
             subject.branches

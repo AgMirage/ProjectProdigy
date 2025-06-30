@@ -25,13 +25,20 @@ class MainViewModel: ObservableObject {
     @Published var systemLog: [LogEntry] = []
     
     @Published var archivedMissions: [Mission] = []
-    @Published var missionToReview: Mission? // For triggering the review sheet
+    @Published var missionToReview: Mission?
 
     @Published var achievementManager: AchievementManager
     @Published var activeMission: Mission?
+    
+    @Published var isShowingAvatarSelection = false
+    @Published var isShowingFamiliarSelection = false
 
     var procrastinationMonsterScale: CGFloat {
         1.0 + (player.procrastinationMonsterValue * 0.1)
+    }
+    
+    var isQuickMissionUnlocked: Bool {
+        player.completedMissionsCount >= 10
     }
 
     private var achievementCancellable: AnyCancellable?
@@ -41,7 +48,7 @@ class MainViewModel: ObservableObject {
 
     init(player: Player) {
         self.player = player
-        self.achievementManager = AchievementManager()
+        self.achievementManager = AchievementManager(savedStatuses: [])
         self.archivedMissions = player.archivedMissions
 
         checkAndUpdateStreak()
@@ -72,7 +79,8 @@ class MainViewModel: ObservableObject {
     }
 
     func completeMission(_ mission: Mission) {
-        var completedMission = mission
+        // --- EDITED: Changed 'var' to 'let' to fix the warning ---
+        let completedMission = mission
         completedMission.status = .completed
         
         self.activeMission = nil
@@ -94,23 +102,17 @@ class MainViewModel: ObservableObject {
             handleDungeonStageCompletion(for: completedMission)
         }
         
-        // Present the review sheet instead of archiving immediately
         self.missionToReview = completedMission
     }
     
-    // --- NEW: Function to handle review submission ---
     func submitMissionReview(for missionID: UUID, focus: Int, understanding: Int, challenge: String) {
-        // This function will be called by the review view.
-        // For now, it just gives a small bonus.
         let bonusGold = 5
         player.gold += bonusGold
         addLogEntry("Review submitted! +\(bonusGold) Gold bonus.", color: .yellow)
     }
 
     func archiveMission(_ mission: Mission) {
-        // This will be called after the review is submitted or skipped.
         let missionToArchive = mission
-        // Find the mission in the archived list to add review data if it exists
         if let index = player.archivedMissions.firstIndex(where: { $0.id == mission.id }) {
              player.archivedMissions[index] = missionToArchive
         } else {

@@ -18,9 +18,9 @@ class KnowledgeTreeViewModel: ObservableObject {
             updateDisplayedBranches()
         }
     }
+    // --- EDITED: Changed to handle both unlocking and remastering ---
     @Published var branchToSetMastery: KnowledgeBranch?
     
-    // --- Re-introducing refreshID to force UI updates reliably ---
     @Published var refreshID = UUID()
     
     private var fullTree: [Subject] = []
@@ -67,34 +67,58 @@ class KnowledgeTreeViewModel: ObservableObject {
             return
         }
         
-        fullTree[sIndex].branches[bIndex].currentXP += xp
+        // --- NEW: Apply permanent subject-specific XP boosts ---
+        var finalXP = xp
+        if let boostMultiplier = player.permanentXpBoosts[subjectName] {
+            finalXP *= (1.0 + boostMultiplier)
+        }
+        
+        fullTree[sIndex].branches[bIndex].currentXP += finalXP
         fullTree[sIndex].branches[bIndex].totalTimeSpent += time
         fullTree[sIndex].branches[bIndex].missionsCompleted += 1
         
-        player.totalXP += xp
+        player.totalXP += finalXP
         mainVM.player = player
         self.player = player
         
         checkForTopicUnlocks(inBranchIndex: bIndex, inSubjectIndex: sIndex)
         updateDisplayedBranches()
-        refreshID = UUID() // Force refresh
+        refreshID = UUID()
     }
 
     func setMasteryGoal(for branch: KnowledgeBranch, level: MasteryLevel) {
         guard var player = self.player, let mainVM = self.mainViewModel else { return }
         guard let (sIndex, bIndex) = findBranchIndices(for: branch.id) else { return }
 
+        // --- NEW: Remastering Logic ---
+        // If the branch is already mastered, this is a remaster action
+        if fullTree[sIndex].branches[bIndex].isMastered {
+            // Apply the permanent stat boost if it's the first time remastering THIS subject
+            let subjectName = findSubjectName(forBranch: branch.name) ?? ""
+            if (player.permanentXpBoosts[subjectName] ?? 0.0) == 0.0 {
+                player.permanentXpBoosts[subjectName] = 0.005 // +0.5% XP
+                mainVM.addLogEntry("Permanent Boost: +0.5% XP for all \(subjectName) missions!", color: .yellow)
+            }
+            
+            fullTree[sIndex].branches[bIndex].remasterCount += 1
+            mainVM.addLogEntry("Branch Remastered: '\(branch.name)'! Challenge increases!", color: .purple)
+            
+            // Now, reset its progress. The new mastery level is set below.
+            resetBranchProgress(branchID: branch.id, shouldUpdateView: false)
+        }
+        
         let mastery = PlayerBranchMastery(branchID: branch.name, level: level)
         player.branchMasteryLevels[branch.name] = mastery
-        mainVM.player = player
-        self.player = player
-
+        
         if !fullTree[sIndex].branches[bIndex].isUnlocked && arePrerequisitesMet(for: fullTree[sIndex].branches[bIndex]) {
             fullTree[sIndex].branches[bIndex].isUnlocked = true
         }
+
+        mainVM.player = player
+        self.player = player
         
         updateDisplayedBranches()
-        refreshID = UUID() // Force refresh
+        refreshID = UUID()
     }
     
     func canAttemptUnlock(for branch: KnowledgeBranch) -> Bool {
@@ -127,7 +151,7 @@ class KnowledgeTreeViewModel: ObservableObject {
             }
         }
         updateDisplayedBranches()
-        refreshID = UUID() // Force refresh
+        refreshID = UUID()
     }
     
     func resetBranchProgress(branchID: UUID, shouldUpdateView: Bool = true) {
@@ -136,6 +160,7 @@ class KnowledgeTreeViewModel: ObservableObject {
         fullTree[sIndex].branches[bIndex].currentXP = 0
         fullTree[sIndex].branches[bIndex].totalTimeSpent = 0
         fullTree[sIndex].branches[bIndex].missionsCompleted = 0
+        // Don't reset remasterCount here
         
         for i in 0..<fullTree[sIndex].branches[bIndex].topics.count {
             fullTree[sIndex].branches[bIndex].topics[i].isUnlocked = false
@@ -143,7 +168,7 @@ class KnowledgeTreeViewModel: ObservableObject {
         
         if shouldUpdateView {
             updateDisplayedBranches()
-            refreshID = UUID() // Force refresh
+            refreshID = UUID()
         }
     }
     
@@ -159,7 +184,7 @@ class KnowledgeTreeViewModel: ObservableObject {
         fullTree[sIndex].branches[bIndex].totalTimeSpent -= topicToReset.timeRequired
         
         updateDisplayedBranches()
-        refreshID = UUID() // Force refresh
+        refreshID = UUID()
     }
 
     // MARK: - Private Helper Functions
@@ -168,13 +193,20 @@ class KnowledgeTreeViewModel: ObservableObject {
         let branch = fullTree[subjectIndex].branches[branchIndex]
         guard branch.isUnlocked else { return }
 
+        // --- NEW: Apply remaster multiplier to requirements ---
+        let remasterMultiplier = 1.0 + (Double(branch.remasterCount) * 0.25)
+
         for i in 0..<branch.topics.count {
             guard !branch.topics[i].isUnlocked else { continue }
             let topic = branch.topics[i]
             
-            if branch.currentXP >= topic.xpRequired &&
-               branch.missionsCompleted >= topic.missionsRequired &&
-               branch.totalTimeSpent >= topic.timeRequired {
+            let requiredXP = topic.xpRequired * remasterMultiplier
+            let requiredMissions = Int(ceil(Double(topic.missionsRequired) * remasterMultiplier))
+            let requiredTime = topic.timeRequired * remasterMultiplier
+            
+            if branch.currentXP >= requiredXP &&
+               branch.missionsCompleted >= requiredMissions &&
+               branch.totalTimeSpent >= requiredTime {
                 
                 fullTree[subjectIndex].branches[branchIndex].topics[i].isUnlocked = true
             }

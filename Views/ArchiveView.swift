@@ -1,11 +1,3 @@
-//
-//  ArchiveView.swift
-//  ProjectProdigy
-//
-//  Created by Kaia Quinn on 6/21/25.
-//
-
-
 import SwiftUI
 
 struct ArchiveView: View {
@@ -89,11 +81,11 @@ struct ArchivedMissionRowView: View {
 // MARK: - Preview
 struct ArchiveView_Previews: PreviewProvider {
     static var previews: some View {
-        // Create some sample data for the preview.
-        var completedMission = Mission.sample
+        // --- EDITED: Changed 'var' to 'let' to fix the warnings ---
+        let completedMission = Mission.sample
         completedMission.status = .completed
         
-        var failedMission = Mission.sample2
+        let failedMission = Mission.sample2
         failedMission.status = .failed
         
         return ArchiveView(archivedMissions: [completedMission, failedMission])

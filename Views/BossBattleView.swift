@@ -5,6 +5,9 @@ struct BossBattleView: View {
     @StateObject private var viewModel: BossBattleViewModel
     @EnvironmentObject var mainViewModel: MainViewModel
     
+    // --- NEW: Access to knowledge tree for pickers ---
+    @EnvironmentObject var knowledgeTreeViewModel: KnowledgeTreeViewModel
+    
     init(mainViewModel: MainViewModel) {
         _viewModel = StateObject(wrappedValue: BossBattleViewModel(mainViewModel: mainViewModel))
     }
@@ -15,7 +18,8 @@ struct BossBattleView: View {
                 if let battle = viewModel.activeBossBattle {
                     ActiveBossBattleView(battle: battle)
                 } else {
-                    CreateBossBattleView()
+                    // --- EDITED: Pass knowledge tree to the creation view ---
+                    CreateBossBattleView(knowledgeTree: knowledgeTreeViewModel.subjects)
                 }
             }
             .navigationTitle("Boss Battles")
@@ -32,28 +36,83 @@ struct BossBattleView: View {
 // MARK: - Helper View: CreateBossBattleView
 struct CreateBossBattleView: View {
     @EnvironmentObject var viewModel: BossBattleViewModel
+    let knowledgeTree: [Subject]
     
     var body: some View {
-        Form {
-            Section(header: Text("Declare a New Battle")) {
-                TextField("Event Name (e.g., CHEM 201 Final)", text: $viewModel.battleName)
-                TextField("Gold Wager", text: $viewModel.wagerAmount)
-                    #if os(iOS)
-                    .keyboardType(.numberPad)
-                    #endif
+        // --- EDITED: Check if the feature is unlocked ---
+        if let gatingMessage = viewModel.gatingMessage {
+            VStack(spacing: 20) {
+                Spacer()
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 60))
+                    .foregroundColor(.secondary)
+                Text("Feature Locked")
+                    .font(.title.bold())
+                Text(gatingMessage)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                    .padding()
+                Spacer()
             }
-            
-            Section(
-                footer: Text("The wagered Gold will be deducted immediately. If you are victorious, you will win your wager back plus a massive jackpot!")
-            ) {
-                Button("Declare Battle!") {
-                    viewModel.declareNewBattle()
+            .padding()
+        } else {
+            // --- The new, detailed form ---
+            Form {
+                Section(header: Text("Declare a New Battle")) {
+                    TextField("Event Name (e.g., CHEM 201 Final)", text: $viewModel.battleName)
+                    
+                    Picker("Subject", selection: $viewModel.selectedSubject) {
+                        Text("Select Subject...").tag(nil as Subject?)
+                        ForEach(knowledgeTree) { Text($0.name).tag($0 as Subject?) }
+                    }
+                    
+                    Picker("Branch", selection: $viewModel.selectedBranch) {
+                        Text("Select Branch...").tag(nil as KnowledgeBranch?)
+                        if let branches = viewModel.selectedSubject?.branches.filter({ $0.isUnlocked }) {
+                            ForEach(branches) { Text($0.name).tag($0 as KnowledgeBranch?) }
+                        }
+                    }
+                    .disabled(viewModel.selectedSubject == nil)
                 }
-                .disabled(viewModel.battleName.isEmpty || viewModel.wagerAmount.isEmpty)
+                
+                Section(header: Text("Battle Configuration")) {
+                    Picker("Battle Type", selection: $viewModel.battleType) {
+                        ForEach(BossBattleType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    DatePicker("Battle Date", selection: $viewModel.battleDate, in: Date()..., displayedComponents: .date)
+                    
+                    HStack {
+                        Text("Expected Duration (Hours)")
+                        TextField("Hours", text: $viewModel.battleDurationHours)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 60)
+                            #if os(iOS)
+                            .keyboardType(.decimalPad)
+                            #endif
+                    }
+                }
+                
+                Section(header: Text("Wager")) {
+                    TextField("Gold Wager", text: $viewModel.wagerAmount)
+                        #if os(iOS)
+                        .keyboardType(.numberPad)
+                        #endif
+                }
+                
+                Section(
+                    footer: Text("The wagered Gold will be deducted immediately. If you are victorious, you will win your wager back plus a massive jackpot!")
+                ) {
+                    Button("Declare Battle!") {
+                        viewModel.declareNewBattle()
+                    }
+                    .disabled(viewModel.battleName.isEmpty || viewModel.wagerAmount.isEmpty || viewModel.selectedBranch == nil)
+                }
             }
-            
-            // --- ADDED: Spacer to push the form content to the top ---
-            Spacer()
         }
     }
 }
@@ -81,9 +140,10 @@ struct ActiveBossBattleView: View {
                 .font(.title2)
                 .foregroundColor(.secondary)
             
-            Text("Awaiting Outcome...")
-                .font(.headline)
-                .padding(.top)
+            if let date = battle.scheduledDate {
+                Text("Scheduled for: \(date, style: .date)")
+                    .font(.headline)
+            }
 
             Spacer()
             
@@ -118,7 +178,10 @@ struct ActiveBossBattleView: View {
 struct BossBattleView_Previews: PreviewProvider {
     static var previews: some View {
         let mainVM = MainViewModel(player: Player(username: "Preview"))
-        BossBattleView(mainViewModel: mainVM)
+        mainVM.player.archivedMissions = (1...10).map { _ in Mission.sample } // For previewing unlocked state
+        
+        return BossBattleView(mainViewModel: mainVM)
+            .environmentObject(KnowledgeTreeViewModel())
     }
 }
 

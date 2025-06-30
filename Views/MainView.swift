@@ -73,8 +73,6 @@ struct MainView: View {
                 
                 Divider()
 
-                // Use a ZStack to keep all views in the hierarchy,
-                // controlling visibility with opacity. This fixes toolbars on macOS.
                 ZStack {
                     viewFor(tab: .home).opacity(selectedTab == .home ? 1 : 0)
                     viewFor(tab: .missions).opacity(selectedTab == .missions ? 1 : 0)
@@ -123,11 +121,22 @@ struct MainDashboardView: View {
     private var dashboardContent: some View {
         ScrollView {
             VStack(spacing: 20) {
-                PlayerHeaderView( player: viewModel.player, onTap: { isShowingTitlesSheet = true })
+                PlayerHeaderView(
+                    player: viewModel.player,
+                    onAvatarTap: { viewModel.isShowingAvatarSelection = true },
+                    onTitleTap: { isShowingTitlesSheet = true }
+                )
+                
                 StatsGridView(stats: viewModel.player.stats)
-                HStack(alignment: .bottom, spacing: 20) {
+                
+                HStack(alignment: .bottom, spacing: 15) {
                     StreakView(streak: viewModel.player.checkInStreak)
-                    FocusFamiliarView(familiar: viewModel.player.activeFamiliar)
+                    
+                    FocusFamiliarView(
+                        familiar: viewModel.player.activeFamiliar,
+                        onSwapTap: { viewModel.isShowingFamiliarSelection = true }
+                    )
+                    
                     VStack {
                         Text("Procrastination").font(.caption).bold()
                         Image("monster_stage_1").resizable().scaledToFit().frame(height: 60)
@@ -135,7 +144,9 @@ struct MainDashboardView: View {
                             .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
                     }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
                 }
+                
                 SystemLogView(logEntries: viewModel.systemLog)
+                
                 Button(action: {
                     missionsViewModel.generateQuickMission()
                 }) {
@@ -146,35 +157,69 @@ struct MainDashboardView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.purple)
                 .padding()
+                // --- EDITED: Gating for Quick Mission button ---
+                .disabled(!viewModel.isQuickMissionUnlocked)
+                .overlay(
+                    !viewModel.isQuickMissionUnlocked ?
+                    Text("Complete \(10 - viewModel.player.completedMissionsCount) more missions to unlock")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 50)
+                    : nil
+                )
             }
             .padding()
         }
         .background(Color.groupedBackground)
         .navigationTitle("Dashboard")
         .sheet(isPresented: $isShowingTitlesSheet) { TitlesView() }
+        // --- NEW: Sheets for selection views ---
+        .sheet(isPresented: $viewModel.isShowingAvatarSelection) { AvatarSelectionView() }
+        .sheet(isPresented: $viewModel.isShowingFamiliarSelection) { FamiliarSelectionView() }
     }
 }
 
-// MARK: - Helper Views (unchanged)
+// MARK: - Helper Views
 struct PlayerHeaderView: View {
     let player: Player
-    let onTap: () -> Void
+    // --- EDITED: Separate closures for different taps ---
+    let onAvatarTap: () -> Void
+    let onTitleTap: () -> Void
+    
+    @EnvironmentObject var mainViewModel: MainViewModel
+    
     var body: some View {
         HStack {
-            NavigationLink(destination: AchievementsView(manager: MainViewModel(player: player).achievementManager)) {
-                Image(player.currentAvatar.imageName).resizable().scaledToFit().frame(width: 60, height: 60).clipShape(Circle()).overlay(Circle().stroke(Color.gray, lineWidth: 2)).shadow(radius: 3)
+            // --- EDITED: Avatar is now a button ---
+            Button(action: onAvatarTap) {
+                Image(player.currentAvatar.imageName)
+                    .resizable().scaledToFit().frame(width: 60, height: 60)
+                    .clipShape(Circle()).overlay(Circle().stroke(Color.gray, lineWidth: 2))
+                    .shadow(radius: 3)
             }
-            Button(action: onTap) {
-                VStack(alignment: .leading, spacing: 2) {
+            
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
                     Text(player.username).font(.title2).bold()
+                    // --- EDITED: Achievements button is now a NavigationLink ---
+                    NavigationLink(destination: AchievementsView(manager: mainViewModel.achievementManager)) {
+                        Image(systemName: "trophy.fill")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                    }
+                }
+                
+                // --- EDITED: Title is now a button ---
+                Button(action: onTitleTap) {
                     if let titleName = player.activeTitle?.name {
                         Text(titleName).font(.footnote).bold().foregroundColor(.purple)
                     } else {
                         Text("No Title Equipped").font(.footnote).italic().foregroundColor(.secondary)
                     }
-                    Text(player.academicTier.rawValue).font(.subheadline).foregroundColor(.secondary)
                 }
+                Text(player.academicTier.rawValue).font(.subheadline).foregroundColor(.secondary)
             }.buttonStyle(.plain)
+            
             Spacer()
             HStack {
                 Image("icon_gold_coin").resizable().scaledToFit().frame(width: 25, height: 25)
@@ -183,17 +228,33 @@ struct PlayerHeaderView: View {
         }.padding().background(Color.secondaryBackground).cornerRadius(12)
     }
 }
+
 struct FocusFamiliarView: View {
     let familiar: Familiar
+    // --- NEW: Closure for swap button ---
+    let onSwapTap: () -> Void
+    
     private var familiarImageName: String { return familiar.imageNamePrefix + "_stage_1" }
+    
     var body: some View {
         VStack {
-            Text(familiar.name).font(.caption).bold()
+            HStack {
+                Text(familiar.name).font(.caption).bold()
+                Spacer()
+                // --- NEW: Swap button ---
+                Button(action: onSwapTap) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+                .font(.caption)
+                .buttonStyle(.borderless)
+                .padding(.trailing, -5)
+            }
             Image(familiarImageName).resizable().scaledToFit().frame(height: 60)
             Text("Lvl: \(familiar.level)").font(.caption)
         }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
     }
 }
+
 struct StatsGridView: View {
     let stats: Stats
     var body: some View {
@@ -203,6 +264,7 @@ struct StatsGridView: View {
         }.padding().background(Color.secondaryBackground).cornerRadius(12)
     }
 }
+
 struct StatBubble: View {
     let name: String, value: Int, icon: String
     var body: some View {
@@ -213,6 +275,7 @@ struct StatBubble: View {
         }.frame(maxWidth: .infinity)
     }
 }
+
 struct StreakView: View {
     let streak: Int
     var body: some View {
@@ -222,6 +285,7 @@ struct StreakView: View {
         }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
     }
 }
+
 struct SystemLogView: View {
     let logEntries: [LogEntry]
     var body: some View {
@@ -243,9 +307,11 @@ struct SystemLogView: View {
         }.padding(.top, 10)
     }
 }
+
 extension DateFormatter {
     static let logTimeFormatter: DateFormatter = { let formatter = DateFormatter(); formatter.dateFormat = "HH:mm:ss"; return formatter }()
 }
+
 fileprivate extension Color {
     #if os(macOS)
     static var groupedBackground = Color(NSColor.controlBackgroundColor)

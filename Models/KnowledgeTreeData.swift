@@ -64,6 +64,10 @@ struct KnowledgeBranch: Identifiable, Codable, Hashable {
     var totalTimeSpent: TimeInterval
     var missionsCompleted: Int
 
+    // --- NEW: Remastering ---
+    /// A count of how many times this branch has been remastered.
+    var remasterCount: Int
+
     var isMastered: Bool {
         guard isUnlocked else { return false }
         return !topics.isEmpty && topics.allSatisfy { $0.isUnlocked }
@@ -79,7 +83,8 @@ struct KnowledgeBranch: Identifiable, Codable, Hashable {
          prerequisiteBranchNames: [String] = [], prerequisiteCompletion: Double = 0.0,
          totalXpRequired: Double = 0.0, totalMissionsRequired: Int = 0, totalTimeRequired: TimeInterval = 0.0,
          requiredStats: [String : Int]? = nil, topics: [KnowledgeTopic],
-         isUnlocked: Bool = false, isAutoUnlocked: Bool = false, currentXP: Double = 0.0, totalTimeSpent: TimeInterval = 0.0, missionsCompleted: Int = 0) {
+         isUnlocked: Bool = false, isAutoUnlocked: Bool = false, currentXP: Double = 0.0, totalTimeSpent: TimeInterval = 0.0, missionsCompleted: Int = 0,
+         remasterCount: Int = 0) { // Added to initializer
         
         self.id = id
         self.name = name
@@ -97,8 +102,10 @@ struct KnowledgeBranch: Identifiable, Codable, Hashable {
         self.currentXP = currentXP
         self.totalTimeSpent = totalTimeSpent
         self.missionsCompleted = missionsCompleted
+        self.remasterCount = remasterCount // Set in initializer
     }
 }
+
 
 /// Represents a major subject area.
 struct Subject: Identifiable, Codable, Hashable {

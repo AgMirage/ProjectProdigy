@@ -2,7 +2,6 @@ import SwiftUI
 
 struct KnowledgeTreeView: View {
     
-    // --- EDITED: This now gets the single source of truth from the environment. ---
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     @EnvironmentObject var mainViewModel: MainViewModel
     
@@ -29,9 +28,10 @@ struct KnowledgeTreeView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            // --- REMOVED: The onAppear logic is now handled by the parent MainView. ---
             .sheet(item: $viewModel.branchToSetMastery) { branch in
+                // --- EDITED: Pass the view model into the sheet ---
                 MasteryGoalSheetView(branch: branch)
+                    .environmentObject(viewModel)
             }
         }
         .environmentObject(viewModel)
@@ -121,7 +121,6 @@ struct BranchView: View {
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     let branch: KnowledgeBranch
     
-    @State private var isShowingResetAlert = false
     @State private var isShowingTooltip = false
     
     private var currentMasteryGoal: MasteryLevel? {
@@ -135,9 +134,18 @@ struct BranchView: View {
     }
     
     private var statusColor: Color {
-        if branch.isMastered { return .green }
+        if branch.isMastered { return .yellow } // Gold for mastered
         if branch.isUnlocked { return .blue }
         return .secondary
+    }
+    
+    // --- NEW: Visual flair for remastered branches ---
+    private var borderColor: Color {
+        switch branch.remasterCount {
+        case 1: return .gray // Silver border
+        case 2: return .yellow // Gold border
+        default: return .clear
+        }
     }
 
     var body: some View {
@@ -147,20 +155,31 @@ struct BranchView: View {
                     .foregroundColor(statusColor)
                 Text(branch.name)
                     .font(.title2.bold())
+                
+                // --- NEW: Remaster indicator ---
+                if branch.remasterCount > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                        Text("+\(branch.remasterCount)")
+                    }
+                    .font(.caption.bold())
+                    .foregroundColor(.purple)
+                }
+                
                 Spacer()
                 if branch.isMastered {
-                    Button { isShowingResetAlert = true } label: {
-                        // --- FIXED: Correct SF Symbol name ---
-                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                    Button("Remaster") {
+                        // Trigger the sheet for remastering
+                        viewModel.branchToSetMastery = branch
                     }
                     .buttonStyle(.bordered)
-                    .tint(.orange)
+                    .tint(.purple)
                 }
             }
             
             Text(branch.description).font(.caption).foregroundColor(.secondary)
             
-            if let goal = currentMasteryGoal {
+            if let goal = currentMasteryGoal, !branch.isMastered {
                 HStack(spacing: 15) {
                     HStack {
                         Image(systemName: "target")
@@ -190,7 +209,7 @@ struct BranchView: View {
                 }
                 .font(.caption)
             }
-            .tint(branch.isUnlocked ? .blue : .gray)
+            .tint(branch.isMastered ? .yellow : (branch.isUnlocked ? .blue : .gray))
             .padding(.bottom, 5)
 
             Divider()
@@ -209,15 +228,11 @@ struct BranchView: View {
         .padding()
         .background(Color.secondaryBackground)
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(borderColor, lineWidth: branch.remasterCount > 0 ? 3 : 0)
+        )
         .opacity(branch.isUnlocked ? 1.0 : 0.7)
-        .alert("Reset Branch Progress?", isPresented: $isShowingResetAlert) {
-            Button("Reset", role: .destructive) {
-                viewModel.resetBranchProgress(branchID: branch.id)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Are you sure you want to reset your progress for the \(branch.name) branch? This will remove all accumulated XP and study time for this specific branch, and mark it as 'unlocked but not mastered' again.")
-        }
     }
     
     private func masteryRequirementsTooltip(goal: MasteryLevel) -> String {
@@ -248,13 +263,15 @@ struct TopicView: View {
     @State private var showTopicResetAlert = false
     
     private var multiplier: Double {
-        viewModel.player?.branchMasteryLevels[parentBranch.name]?.level.multiplier ?? 1.0
+        let masteryMultiplier = viewModel.player?.branchMasteryLevels[parentBranch.name]?.level.multiplier ?? 1.0
+        let remasterMultiplier = 1.0 + (Double(parentBranch.remasterCount) * 0.25)
+        return masteryMultiplier * remasterMultiplier
     }
     private var displayXpRequired: Int {
         Int(topic.xpRequired * multiplier)
     }
     private var displayMissionsRequired: Int {
-        Int(Double(topic.missionsRequired) * multiplier)
+        Int(ceil(Double(topic.missionsRequired) * multiplier))
     }
     private var displayTimeRequired: TimeInterval {
         topic.timeRequired * multiplier
@@ -287,7 +304,6 @@ struct TopicView: View {
                 Button {
                     showTopicResetAlert = true
                 } label: {
-                    // --- FIXED: Correct SF Symbol name ---
                     Image(systemName: "arrow.counterclockwise")
                         .font(.caption)
                 }
@@ -372,12 +388,20 @@ struct MasteryGoalSheetView: View {
     @Environment(\.dismiss) var dismiss
     let branch: KnowledgeBranch
     
+    private var isRemastering: Bool {
+        branch.isMastered
+    }
+    
     var body: some View {
         VStack(spacing: 20) {
-            Text("Set Mastery Goal").font(.largeTitle.bold())
+            Text(isRemastering ? "Remaster Branch" : "Set Mastery Goal")
+                .font(.largeTitle.bold())
+            
             Text(branch.name).font(.title2).foregroundColor(.secondary)
             Divider()
-            Text("Choose your goal for this branch. Higher goals require more effort but grant greater rewards upon completion.").font(.subheadline).multilineTextAlignment(.center).padding(.horizontal)
+            
+            Text(isRemastering ? "Select a new, higher mastery goal for this branch. Requirements will be scaled up accordingly." : "Choose your goal for this branch. Higher goals require more effort but grant greater rewards upon completion.")
+                .font(.subheadline).multilineTextAlignment(.center).padding(.horizontal)
 
             VStack(spacing: 15) {
                 ForEach(MasteryLevel.allCases, id: \.self) { level in
@@ -392,6 +416,8 @@ struct MasteryGoalSheetView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+                    // Disable goals that are not higher than the current one when remastering
+                    .disabled(isRemastering && (viewModel.player?.branchMasteryLevels[branch.name]?.level ?? .standard) >= level)
                 }
                 Button("Custom (Coming Soon)") {}.buttonStyle(.bordered).disabled(true)
             }
