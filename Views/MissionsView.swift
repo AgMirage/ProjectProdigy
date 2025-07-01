@@ -19,32 +19,25 @@ struct MissionsView: View {
     
     private var missionsContent: some View {
         VStack {
-            HStack {
-                Picker("Status", selection: $viewModel.statusFilter) {
-                    Text("All Statuses").tag(nil as MissionStatus?)
-                    ForEach(MissionStatus.allCases, id: \.self) { status in
-                        Text(status.rawValue).tag(status as MissionStatus?)
-                    }
+            Picker("View", selection: $viewModel.selectedTab) {
+                ForEach(MissionListTab.allCases, id: \.self) { tab in
+                    Text(tab.rawValue).tag(tab)
                 }
-                .pickerStyle(.menu)
-                
-                Picker("Source", selection: $viewModel.sourceFilter) {
-                    Text("All Sources").tag(nil as MissionSource?)
-                    ForEach([MissionSource.manual, .automatic, .dungeon, .guild], id: \.self) { source in
-                        Text(source.rawValue.capitalized).tag(source as MissionSource?)
-                    }
-                }
-                .pickerStyle(.menu)
             }
-            .padding(.horizontal)
+            .pickerStyle(.segmented)
+            .padding()
 
-            List {
-                ForEach(viewModel.filteredAndSortedMissions) { mission in
-                    MissionRowView(mission: mission)
+            if viewModel.selectedTab == .completed {
+                ArchiveView(archivedMissions: mainViewModel.archivedMissions)
+            } else {
+                List {
+                    ForEach(viewModel.filteredAndSortedMissions) { mission in
+                        MissionRowView(mission: mission)
+                    }
+                    .onDelete(perform: viewModel.deleteMission)
                 }
-                .onDelete(perform: viewModel.deleteMission)
+                .listStyle(.plain)
             }
-            .listStyle(.plain)
         }
         .navigationTitle("Missions")
         .toolbar {
@@ -111,12 +104,33 @@ struct MissionRowView: View {
                 .buttonStyle(.plain)
             }
             
-            progressSection
-            
-            missionActionButtons
-                .padding(.top, 5)
+            if mission.status == .scheduled {
+                scheduledSection
+            } else {
+                progressSection
+                missionActionButtons
+                    .padding(.top, 5)
+            }
 
         }.padding(.vertical, 10)
+    }
+    
+    @ViewBuilder
+    private var scheduledSection: some View {
+        if let scheduledDate = mission.scheduledDate {
+            HStack {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.title2)
+                    .foregroundColor(.accentColor)
+                
+                TimelineView(.periodic(from: .now, by: 1.0)) { context in
+                    Text(countdown(to: scheduledDate, from: context.date))
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+        }
     }
     
     @ViewBuilder
@@ -218,6 +232,11 @@ struct MissionRowView: View {
                         .font(.headline.bold())
                         .foregroundColor(.green)
                         .frame(maxWidth: .infinity, alignment: .center)
+                case .scheduled:
+                     Text("Scheduled")
+                        .font(.headline.bold())
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
         }
@@ -236,6 +255,7 @@ struct MissionRowView: View {
         }
     }
     
+    // --- EDITED: Added a clamp to ensure the progress value is never out of bounds ---
     private var overallProgressValue: Double {
         guard mission.isPomodoro else { return 0 }
         
@@ -243,13 +263,37 @@ struct MissionRowView: View {
         let completedCyclesTime = Double(mission.pomodoroCycle - 1) * studyDuration
         
         var currentCycleTime: Double = 0
-        if !mission.isBreakTime && mission.status == .inProgress {
-            currentCycleTime = studyDuration - mission.timeRemaining
-        } else if !mission.isBreakTime && mission.status == .paused {
+        if !mission.isBreakTime && (mission.status == .inProgress || mission.status == .paused) {
             currentCycleTime = studyDuration - mission.timeRemaining
         }
         
-        return min(completedCyclesTime + currentCycleTime, mission.totalDuration)
+        let value = completedCyclesTime + currentCycleTime
+        
+        // This clamp prevents the value from going below 0 or above the total.
+        return max(0, min(value, mission.totalDuration))
+    }
+    
+    private func countdown(to date: Date, from now: Date) -> String {
+        let components = Calendar.current.dateComponents([.day, .hour, .minute, .second], from: now, to: date)
+        
+        let day = components.day ?? 0
+        let hour = components.hour ?? 0
+        let minute = components.minute ?? 0
+        let second = components.second ?? 0
+        
+        if day > 1 {
+            return "Starts in \(day) days"
+        } else if day == 1 {
+            return "Starts tomorrow at \(date.formatted(date: .omitted, time: .shortened))"
+        } else if hour > 0 {
+            return String(format: "Starts in %dh %dm", hour, minute)
+        } else if minute > 0 {
+            return String(format: "Starts in %dm %ds", minute, second)
+        } else if second > 0 {
+            return "Starts in \(second)s"
+        } else {
+            return "Starting now..."
+        }
     }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {
@@ -292,6 +336,14 @@ struct CreateMissionView: View {
             }
             .onChange(of: viewModel.missionHours) { _, _ in checkPomodoroEligibility() }
             .onChange(of: viewModel.missionMinutes) { _, _ in checkPomodoroEligibility() }
+            .alert("Scheduling Conflict", isPresented: $viewModel.showConflictAlert, presenting: viewModel.conflictingMission) { conflictingMission in
+                Button("Create Anyway", role: .destructive) {
+                    viewModel.proceedWithMissionCreation()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: { conflictingMission in
+                Text("This mission overlaps with your scheduled mission \"\(conflictingMission.topicName)\". Are you sure you want to create it?")
+            }
         }
     }
     
@@ -339,7 +391,6 @@ struct CreateMissionView: View {
             }
         } header: {
             Text("Mission Details")
-        // --- EDITED: Changed condition to show for 0 minutes ---
         } footer: {
             if totalMinutes < 5 {
                 Text("Missions must be at least 5 minutes long.")

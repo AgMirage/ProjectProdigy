@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Represents the current state of a mission.
 enum MissionStatus: String, Codable, CaseIterable {
-    case pending = "Pending", inProgress = "In Progress", paused = "Paused", completed = "Completed", failed = "Failed"
+    // --- EDITED: Added the 'scheduled' case ---
+    case pending = "Pending", scheduled = "Scheduled", inProgress = "In Progress", paused = "Paused", completed = "Completed", failed = "Failed"
 }
 
 /// Tracks where a mission was generated. Crucial for filtering.

@@ -1,6 +1,14 @@
 import Foundation
 import Combine
 
+// Enum for the view's tabs
+enum MissionListTab: String, CaseIterable {
+    case active = "Active"
+    case scheduled = "Scheduled"
+    case completed = "Completed"
+}
+
+
 @MainActor
 class MissionsViewModel: ObservableObject {
     
@@ -9,7 +17,7 @@ class MissionsViewModel: ObservableObject {
     @Published var activeMissions: [Mission] = []
     @Published var isShowingCreateSheet = false
     
-    @Published var statusFilter: MissionStatus? = nil
+    @Published var selectedTab: MissionListTab = .active
     @Published var sourceFilter: MissionSource? = nil
     
     @Published var selectedSubject: Subject?
@@ -22,6 +30,10 @@ class MissionsViewModel: ObservableObject {
     @Published var scheduledDate: Date?
 
     @Published var dailyMissionSettings = DailyMissionSettings.default
+    
+    // --- NEW: Properties for conflict detection ---
+    @Published var conflictingMission: Mission?
+    @Published var showConflictAlert = false
 
     var canEnablePomodoro: Bool {
         let totalDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
@@ -34,11 +46,19 @@ class MissionsViewModel: ObservableObject {
     }
     
     var filteredAndSortedMissions: [Mission] {
-        var missions = activeMissions
+        var missions: [Mission]
 
-        if let statusFilter = statusFilter {
-            missions = missions.filter { $0.status == statusFilter }
+        switch selectedTab {
+        case .active:
+            missions = activeMissions.filter {
+                $0.status == .inProgress || $0.status == .paused || $0.status == .pending
+            }
+        case .scheduled:
+            missions = activeMissions.filter { $0.status == .scheduled }
+        case .completed:
+            return []
         }
+
         if let sourceFilter = sourceFilter {
             missions = missions.filter { $0.source == sourceFilter }
         }
@@ -46,6 +66,9 @@ class MissionsViewModel: ObservableObject {
         missions.sort {
             if $0.isPinned != $1.isPinned {
                 return $0.isPinned && !$1.isPinned
+            }
+            if $0.status == .scheduled && $1.status == .scheduled {
+                return ($0.scheduledDate ?? Date()) < ($1.scheduledDate ?? Date())
             }
             return $0.creationDate > $1.creationDate
         }
@@ -61,6 +84,7 @@ class MissionsViewModel: ObservableObject {
     var knowledgeTree: [Subject] = []
     
     private var timer: AnyCancellable?
+    private var scheduleCheckTimer: AnyCancellable?
     private weak var mainViewModel: MainViewModel?
     
     // MARK: - Initialization
@@ -74,6 +98,12 @@ class MissionsViewModel: ObservableObject {
         let newDailyMissions = dailyManager.generateMissionsForToday(knowledgeTree: self.knowledgeTree)
         self.dailyMissionSettings = dailyManager.settings
         self.activeMissions.append(contentsOf: newDailyMissions)
+        
+        self.scheduleCheckTimer = Timer.publish(every: 5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.checkForScheduledMissions()
+            }
     }
     
     // MARK: - Reward Calculation
@@ -113,7 +143,33 @@ class MissionsViewModel: ObservableObject {
     
     // MARK: - Mission Creation & Lifecycle
     
+    /// The first step of mission creation. Checks for conflicts before proceeding.
     func createMission() {
+        // --- NEW: Conflict Check ---
+        if let scheduledDate = self.scheduledDate {
+            let newMissionDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
+            let newMissionEnd = scheduledDate.addingTimeInterval(newMissionDuration)
+
+            for existingMission in activeMissions where existingMission.status == .scheduled {
+                if let existingStart = existingMission.scheduledDate {
+                    let existingEnd = existingStart.addingTimeInterval(existingMission.totalDuration)
+                    // Check for overlap: (StartA < EndB) and (EndA > StartB)
+                    if scheduledDate < existingEnd && newMissionEnd > existingStart {
+                        // Conflict found, show an alert.
+                        self.conflictingMission = existingMission
+                        self.showConflictAlert = true
+                        return
+                    }
+                }
+            }
+        }
+        
+        // No conflict, proceed with creation.
+        proceedWithMissionCreation()
+    }
+    
+    /// The second step of mission creation, called after the conflict check passes or is overridden by the user.
+    func proceedWithMissionCreation() {
         guard let subject = selectedSubject,
               let branch = selectedBranch,
               let topic = selectedTopic,
@@ -131,12 +187,29 @@ class MissionsViewModel: ObservableObject {
             player: player
         )
         
-        let newMission = Mission(id: UUID(), subjectName: subject.name, branchName: branch.name, topicName: topic.name, studyType: studyType, creationDate: Date(), scheduledDate: self.scheduledDate, totalDuration: totalDuration, timeRemaining: initialTimeRemaining, status: .pending, isPomodoro: isPomodoroEnabled, xpReward: rewards.xp, goldReward: rewards.gold)
+        let newStatus: MissionStatus = (self.scheduledDate != nil && self.scheduledDate! > Date()) ? .scheduled : .pending
+        
+        let newMission = Mission(
+            id: UUID(),
+            subjectName: subject.name,
+            branchName: branch.name,
+            topicName: topic.name,
+            studyType: studyType,
+            creationDate: Date(),
+            scheduledDate: self.scheduledDate,
+            totalDuration: totalDuration,
+            timeRemaining: initialTimeRemaining,
+            status: newStatus,
+            isPomodoro: isPomodoroEnabled,
+            xpReward: rewards.xp,
+            goldReward: rewards.gold
+        )
         
         activeMissions.append(newMission)
         isShowingCreateSheet = false
         resetForm()
     }
+
     
     func generateQuickMission() {
         guard let player = mainViewModel?.player,
@@ -185,6 +258,10 @@ class MissionsViewModel: ObservableObject {
     func startMission(mission: Mission) {
         stopAllMissions()
         
+        if mission.status == .scheduled {
+            mainViewModel?.addLogEntry("Your scheduled mission \"\(mission.topicName)\" is starting now!", color: .cyan)
+        }
+        
         if mission.status == .pending {
             if mission.isPomodoro {
                 mission.timeRemaining = min(mission.totalDuration, dailyMissionSettings.pomodoroStudyDuration)
@@ -206,7 +283,6 @@ class MissionsViewModel: ObservableObject {
         timer?.cancel()
     }
     
-    // --- EDITED: Corrected call to pass explicit rewards ---
     func completeMission(mission: Mission) {
         timer?.cancel()
         mainViewModel?.completeMission(mission, xpGained: mission.xpReward, goldGained: mission.goldReward)
@@ -221,7 +297,6 @@ class MissionsViewModel: ObservableObject {
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.updateTimer() }
     }
     
-    // --- EDITED: Corrected call to pass explicit rewards ---
     func completeMissionForBonus(mission: Mission) {
         timer?.cancel()
         
@@ -255,7 +330,10 @@ class MissionsViewModel: ObservableObject {
     }
     
     func deleteMission(at offsets: IndexSet) {
-        activeMissions.remove(atOffsets: offsets)
+        let missionsToDelete = offsets.map { filteredAndSortedMissions[$0] }
+        activeMissions.removeAll { mission in
+            missionsToDelete.contains(where: { $0.id == mission.id })
+        }
     }
     
     func togglePin(for mission: Mission) {
@@ -274,6 +352,14 @@ class MissionsViewModel: ObservableObject {
         timer?.cancel()
         for mission in activeMissions where mission.status == .inProgress {
             mission.status = .paused
+        }
+    }
+    
+    private func checkForScheduledMissions() {
+        for mission in activeMissions where mission.status == .scheduled {
+            if let scheduledDate = mission.scheduledDate, scheduledDate <= Date() {
+                startMission(mission: mission)
+            }
         }
     }
     
