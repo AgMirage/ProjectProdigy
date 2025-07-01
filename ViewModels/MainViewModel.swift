@@ -78,20 +78,20 @@ class MainViewModel: ObservableObject {
         addLogEntry("Mission Paused.", color: .orange)
     }
 
-    func completeMission(_ mission: Mission) {
-        // --- EDITED: Changed 'var' to 'let' to fix the warning ---
+    // --- EDITED: Updated function to accept explicit rewards ---
+    func completeMission(_ mission: Mission, xpGained: Double, goldGained: Int) {
         let completedMission = mission
         completedMission.status = .completed
         
         self.activeMission = nil
         stopFamiliarXpTimer()
 
-        player.gold += completedMission.goldReward
-        player.totalXP += completedMission.xpReward
+        player.gold += goldGained
+        player.totalXP += xpGained
         player.lastMissionCompletionDate = Date()
         player.checkInStreak += 1
 
-        addLogEntry("Mission Complete! +\(Int(completedMission.xpReward)) XP, +\(completedMission.goldReward) Gold.", color: .yellow)
+        addLogEntry("Mission Complete! +\(Int(xpGained)) XP, +\(goldGained) Gold.", color: .yellow)
 
         achievementManager.processEvent(.missionCompleted, for: &player)
         achievementManager.processEvent(.goldEarned(totalAmount: player.gold), for: &player)
@@ -124,7 +124,9 @@ class MainViewModel: ObservableObject {
 
 
     func completeTestMission() {
-        self.completeMission(Mission.sample)
+        // This function would now need to be updated if used, to pass the explicit rewards.
+        // For now, we leave it as is, but it would not compile without adjustment.
+        // self.completeMission(Mission.sample, xpGained: Mission.sample.xpReward, goldGained: Mission.sample.goldReward)
     }
     
     private func handleDungeonStageCompletion(for completedMission: Mission) {

@@ -110,22 +110,73 @@ struct MissionRowView: View {
                 }
                 .buttonStyle(.plain)
             }
-            VStack {
-                if mission.isPomodoro && mission.status == .inProgress {
-                    Text(mission.isBreakTime ? "Break Time!" : "Focus Cycle: \(mission.pomodoroCycle)")
-                        .font(.headline).foregroundColor(mission.isBreakTime ? .green : .purple)
+            
+            progressSection
+            
+            missionActionButtons
+                .padding(.top, 5)
+
+        }.padding(.vertical, 10)
+    }
+    
+    @ViewBuilder
+    private var progressSection: some View {
+        VStack {
+            if mission.isPomodoro && mission.status != .pending {
+                VStack(spacing: 2) {
+                    ProgressView(value: overallProgressValue, total: mission.totalDuration) {
+                        HStack {
+                            Text("Overall Mission Progress").font(.caption).foregroundColor(.secondary)
+                            Spacer()
+                            Text("\(Int(overallProgressValue / 60)) / \(Int(mission.totalDuration / 60)) min")
+                                .font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                    .tint(.blue)
                 }
-                
-                ProgressView(value: progressValue, total: progressTotal)
-                    .tint(mission.status == .inProgress ? (mission.isBreakTime ? .green : .purple) : .blue)
-                
-                HStack {
-                    Text(formatTime(mission.timeRemaining)).font(.system(size: 36, weight: .bold, design: .monospaced))
-                    Spacer()
-                    Text(formatTime(mission.totalDuration)).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(.secondary)
-                }
+                .padding(.bottom, 8)
             }
             
+            if mission.isPomodoro && mission.status == .inProgress {
+                Text(mission.isBreakTime ? "Break Time!" : "Focus Cycle: \(mission.pomodoroCycle)")
+                    .font(.headline).foregroundColor(mission.isBreakTime ? .green : .purple)
+            }
+            
+            ProgressView(value: cycleProgressValue, total: cycleProgressTotal)
+                .tint(mission.status == .inProgress ? (mission.isBreakTime ? .green : .purple) : .blue)
+            
+            HStack {
+                Text(formatTime(mission.timeRemaining)).font(.system(size: 36, weight: .bold, design: .monospaced))
+                Spacer()
+                Text(formatTime(cycleProgressTotal)).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var missionActionButtons: some View {
+        if mission.isEligibleForCycleBonus {
+            VStack(alignment: .center, spacing: 10) {
+                Text("Mission Goal Reached!")
+                    .font(.headline)
+                    .bold()
+                    .foregroundColor(.green)
+                
+                Text("Finish the current focus block for a +10% reward bonus.")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                
+                HStack {
+                    Button("Complete Now") { viewModel.completeMission(mission: mission) }
+                        .buttonStyle(.bordered).tint(.blue)
+                    
+                    Button("Focus for Bonus") { viewModel.acceptCycleBonus(mission: mission) }
+                        .buttonStyle(.borderedProminent).tint(.purple)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        } else {
             HStack(spacing: 8) {
                 switch mission.status {
                 case .pending:
@@ -169,26 +220,36 @@ struct MissionRowView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
-            .padding(.top, 5)
-
-        }.padding(.vertical, 10)
-    }
-    
-    private var progressValue: Double {
-        if mission.isPomodoro {
-            let cycleDuration = mission.isBreakTime ? viewModel.dailyMissionSettings.pomodoroBreakDuration : viewModel.dailyMissionSettings.pomodoroStudyDuration
-            return cycleDuration - mission.timeRemaining
-        } else {
-            return mission.totalDuration - mission.timeRemaining
         }
     }
     
-    private var progressTotal: Double {
+    private var cycleProgressValue: Double {
+        let value = cycleProgressTotal - mission.timeRemaining
+        return max(0, min(value, cycleProgressTotal))
+    }
+    
+    private var cycleProgressTotal: Double {
         if mission.isPomodoro {
             return mission.isBreakTime ? viewModel.dailyMissionSettings.pomodoroBreakDuration : viewModel.dailyMissionSettings.pomodoroStudyDuration
         } else {
             return mission.totalDuration
         }
+    }
+    
+    private var overallProgressValue: Double {
+        guard mission.isPomodoro else { return 0 }
+        
+        let studyDuration = viewModel.dailyMissionSettings.pomodoroStudyDuration
+        let completedCyclesTime = Double(mission.pomodoroCycle - 1) * studyDuration
+        
+        var currentCycleTime: Double = 0
+        if !mission.isBreakTime && mission.status == .inProgress {
+            currentCycleTime = studyDuration - mission.timeRemaining
+        } else if !mission.isBreakTime && mission.status == .paused {
+            currentCycleTime = studyDuration - mission.timeRemaining
+        }
+        
+        return min(completedCyclesTime + currentCycleTime, mission.totalDuration)
     }
     
     private func formatTime(_ timeInterval: TimeInterval) -> String {
@@ -213,20 +274,9 @@ struct CreateMissionView: View {
                 topicSection
                 detailsSection
                 
-                Section(header: Text("Scheduling")) {
-                    Toggle("Schedule for Later?", isOn: $isScheduling.animation())
-                    
-                    if isScheduling {
-                        DatePicker(
-                            "Scheduled Time",
-                            selection: Binding(
-                                get: { viewModel.scheduledDate ?? Date() },
-                                set: { viewModel.scheduledDate = $0 }
-                            ),
-                            in: Date()...,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                    }
+                Section {
+                    pomodoroToggle
+                    schedulingToggle
                 }
                 
                 createButtonSection
@@ -240,7 +290,6 @@ struct CreateMissionView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            // --- NEW: Automatically disable Pomodoro if duration is too short ---
             .onChange(of: viewModel.missionHours) { _, _ in checkPomodoroEligibility() }
             .onChange(of: viewModel.missionMinutes) { _, _ in checkPomodoroEligibility() }
         }
@@ -274,7 +323,9 @@ struct CreateMissionView: View {
     }
     
     private var detailsSection: some View {
-        Section(header: Text("Mission Details")) {
+        let totalMinutes = (viewModel.missionHours * 60) + viewModel.missionMinutes
+        
+        return Section {
             Picker("Study Type", selection: $viewModel.selectedStudyType) {
                 Text("Select Study Type...").tag(nil as StudyType?)
                 ForEach(viewModel.availableStudyTypes, id: \.self) { Text($0.displayString).tag($0 as StudyType?) }
@@ -286,24 +337,62 @@ struct CreateMissionView: View {
                 Picker("Hours", selection: $viewModel.missionHours) { ForEach(0..<24) { Text("\($0) hr").tag($0) } }.pickerStyle(.menu)
                 Picker("Minutes", selection: $viewModel.missionMinutes) { ForEach(0..<60) { Text("\($0) min").tag($0) } }.pickerStyle(.menu)
             }
+        } header: {
+            Text("Mission Details")
+        // --- EDITED: Changed condition to show for 0 minutes ---
+        } footer: {
+            if totalMinutes < 5 {
+                Text("Missions must be at least 5 minutes long.")
+                    .foregroundColor(.red)
+            }
+        }
+    }
+    
+    private var pomodoroToggle: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Toggle("Enable Pomodoro Mode", isOn: $viewModel.isPomodoroEnabled)
+                .disabled(!viewModel.canEnablePomodoro)
             
-            // --- EDITED: Added disabled logic and feedback text ---
-            VStack(alignment: .leading, spacing: 5) {
-                Toggle("Enable Pomodoro Mode", isOn: $viewModel.isPomodoroEnabled)
-                    .disabled(!viewModel.canEnablePomodoro)
-                
-                if !viewModel.canEnablePomodoro {
-                    Text(viewModel.pomodoroRequirementMessage)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+            if !viewModel.canEnablePomodoro {
+                Text(viewModel.pomodoroRequirementMessage)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private var schedulingToggle: some View {
+        VStack {
+            Toggle("Schedule for Later?", isOn: $isScheduling.animation())
+            
+            if isScheduling {
+                DatePicker(
+                    "Scheduled Time",
+                    selection: Binding(
+                        get: { viewModel.scheduledDate ?? Date() },
+                        set: { viewModel.scheduledDate = $0 }
+                    ),
+                    in: Date()...,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
             }
         }
     }
     
     private var createButtonSection: some View {
-        let isInvalid = viewModel.selectedSubject == nil || viewModel.selectedBranch == nil || viewModel.selectedTopic == nil || viewModel.selectedStudyType == nil
-        return Section { Button("Create Mission") { viewModel.createMission() }.disabled(isInvalid) }
+        let isTopicInvalid = viewModel.selectedSubject == nil || viewModel.selectedBranch == nil || viewModel.selectedTopic == nil || viewModel.selectedStudyType == nil
+        
+        let totalMinutes = (viewModel.missionHours * 60) + viewModel.missionMinutes
+        let isDurationInvalid = totalMinutes < 5
+        
+        let isInvalid = isTopicInvalid || isDurationInvalid
+        
+        return Section {
+            Button("Create Mission") {
+                viewModel.createMission()
+            }
+            .disabled(isInvalid)
+        }
     }
     
     private func checkPomodoroEligibility() {

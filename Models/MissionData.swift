@@ -102,6 +102,11 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
     @Published var allowedPauseTime: TimeInterval?
     @Published var timePaused: TimeInterval
     @Published var battleType: BossBattleType?
+    
+    // --- NEW: Properties for the "Finish the Cycle" bonus ---
+    @Published var isEligibleForCycleBonus: Bool
+    @Published var isFinishingForBonus: Bool
+
 
     // Conformance to Hashable
     func hash(into hasher: inout Hasher) {
@@ -115,7 +120,7 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
     
     // --- Manual implementation of Codable ---
     enum CodingKeys: String, CodingKey {
-        case id, subjectName, branchName, topicName, studyType, creationDate, scheduledDate, totalDuration, timeRemaining, status, isPomodoro, pomodoroCycle, isBreakTime, isBossBattle, goldWager, xpReward, goldReward, source, isPinned, difficulty, allowedPauseTime, timePaused, battleType
+        case id, subjectName, branchName, topicName, studyType, creationDate, scheduledDate, totalDuration, timeRemaining, status, isPomodoro, pomodoroCycle, isBreakTime, isBossBattle, goldWager, xpReward, goldReward, source, isPinned, difficulty, allowedPauseTime, timePaused, battleType, isEligibleForCycleBonus, isFinishingForBonus
     }
     
     required init(from decoder: Decoder) throws {
@@ -143,6 +148,10 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         allowedPauseTime = try container.decodeIfPresent(TimeInterval.self, forKey: .allowedPauseTime)
         timePaused = try container.decode(TimeInterval.self, forKey: .timePaused)
         battleType = try container.decodeIfPresent(BossBattleType.self, forKey: .battleType)
+        
+        // --- NEW ---
+        isEligibleForCycleBonus = try container.decodeIfPresent(Bool.self, forKey: .isEligibleForCycleBonus) ?? false
+        isFinishingForBonus = try container.decodeIfPresent(Bool.self, forKey: .isFinishingForBonus) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -170,10 +179,14 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         try container.encodeIfPresent(allowedPauseTime, forKey: .allowedPauseTime)
         try container.encode(timePaused, forKey: .timePaused)
         try container.encodeIfPresent(battleType, forKey: .battleType)
+        
+        // --- NEW ---
+        try container.encode(isEligibleForCycleBonus, forKey: .isEligibleForCycleBonus)
+        try container.encode(isFinishingForBonus, forKey: .isFinishingForBonus)
     }
 
     // Custom initializer to maintain ease of creation
-    init(id: UUID, subjectName: String, branchName: String, topicName: String, studyType: StudyType, creationDate: Date, scheduledDate: Date? = nil, totalDuration: TimeInterval, timeRemaining: TimeInterval, status: MissionStatus, isPomodoro: Bool = false, pomodoroCycle: Int = 0, isBreakTime: Bool = false, isBossBattle: Bool = false, goldWager: Int? = nil, xpReward: Double, goldReward: Int, source: MissionSource = .manual, isPinned: Bool = false, difficulty: MissionDifficulty = .medium, allowedPauseTime: TimeInterval? = nil, timePaused: TimeInterval = 0, battleType: BossBattleType? = nil) {
+    init(id: UUID, subjectName: String, branchName: String, topicName: String, studyType: StudyType, creationDate: Date, scheduledDate: Date? = nil, totalDuration: TimeInterval, timeRemaining: TimeInterval, status: MissionStatus, isPomodoro: Bool = false, pomodoroCycle: Int = 0, isBreakTime: Bool = false, isBossBattle: Bool = false, goldWager: Int? = nil, xpReward: Double, goldReward: Int, source: MissionSource = .manual, isPinned: Bool = false, difficulty: MissionDifficulty = .medium, allowedPauseTime: TimeInterval? = nil, timePaused: TimeInterval = 0, battleType: BossBattleType? = nil, isEligibleForCycleBonus: Bool = false, isFinishingForBonus: Bool = false) {
         self.id = id
         self.subjectName = subjectName
         self.branchName = branchName
@@ -197,6 +210,10 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         self.allowedPauseTime = allowedPauseTime
         self.timePaused = timePaused
         self.battleType = battleType
+        
+        // --- NEW ---
+        self.isEligibleForCycleBonus = isEligibleForCycleBonus
+        self.isFinishingForBonus = isFinishingForBonus
     }
     
     static var sample: Mission { Mission(id: UUID(), subjectName: "Mathematics", branchName: "Calculus 1", topicName: "The Chain Rule", studyType: .solvingProblemSet, creationDate: Date(), totalDuration: 3600, timeRemaining: 3600, status: .pending, xpReward: 150, goldReward: 25) }
