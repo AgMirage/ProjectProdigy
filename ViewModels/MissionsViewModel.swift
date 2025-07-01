@@ -1,10 +1,11 @@
 import Foundation
 import Combine
 
-// Enum for the view's tabs
+// --- EDITED: Added 'planner' case ---
 enum MissionListTab: String, CaseIterable {
     case active = "Active"
     case scheduled = "Scheduled"
+    case planner = "Planner"
     case completed = "Completed"
 }
 
@@ -31,7 +32,6 @@ class MissionsViewModel: ObservableObject {
 
     @Published var dailyMissionSettings = DailyMissionSettings.default
     
-    // --- NEW: Properties for conflict detection ---
     @Published var conflictingMission: Mission?
     @Published var showConflictAlert = false
 
@@ -53,7 +53,8 @@ class MissionsViewModel: ObservableObject {
             missions = activeMissions.filter {
                 $0.status == .inProgress || $0.status == .paused || $0.status == .pending
             }
-        case .scheduled:
+        // --- EDITED: Planner tab is handled by a separate view ---
+        case .scheduled, .planner:
             missions = activeMissions.filter { $0.status == .scheduled }
         case .completed:
             return []
@@ -106,6 +107,20 @@ class MissionsViewModel: ObservableObject {
             }
     }
     
+    // MARK: - Public Helper for Calendar
+    
+    // --- NEW: Function to get sorted missions for a specific day ---
+    func missions(for day: Date) -> [Mission] {
+        let calendar = Calendar.current
+        return activeMissions.filter { mission in
+            guard let scheduledDate = mission.scheduledDate, mission.status == .scheduled else {
+                return false
+            }
+            return calendar.isDate(scheduledDate, inSameDayAs: day)
+        }
+        .sorted { ($0.scheduledDate ?? Date()) < ($1.scheduledDate ?? Date()) }
+    }
+
     // MARK: - Reward Calculation
     
     private func calculateRewards(
@@ -143,9 +158,7 @@ class MissionsViewModel: ObservableObject {
     
     // MARK: - Mission Creation & Lifecycle
     
-    /// The first step of mission creation. Checks for conflicts before proceeding.
     func createMission() {
-        // --- NEW: Conflict Check ---
         if let scheduledDate = self.scheduledDate {
             let newMissionDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
             let newMissionEnd = scheduledDate.addingTimeInterval(newMissionDuration)
@@ -153,9 +166,7 @@ class MissionsViewModel: ObservableObject {
             for existingMission in activeMissions where existingMission.status == .scheduled {
                 if let existingStart = existingMission.scheduledDate {
                     let existingEnd = existingStart.addingTimeInterval(existingMission.totalDuration)
-                    // Check for overlap: (StartA < EndB) and (EndA > StartB)
                     if scheduledDate < existingEnd && newMissionEnd > existingStart {
-                        // Conflict found, show an alert.
                         self.conflictingMission = existingMission
                         self.showConflictAlert = true
                         return
@@ -164,11 +175,9 @@ class MissionsViewModel: ObservableObject {
             }
         }
         
-        // No conflict, proceed with creation.
         proceedWithMissionCreation()
     }
     
-    /// The second step of mission creation, called after the conflict check passes or is overridden by the user.
     func proceedWithMissionCreation() {
         guard let subject = selectedSubject,
               let branch = selectedBranch,

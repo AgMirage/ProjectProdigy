@@ -27,16 +27,13 @@ struct MissionsView: View {
             .pickerStyle(.segmented)
             .padding()
 
-            if viewModel.selectedTab == .completed {
+            switch viewModel.selectedTab {
+            case .active, .scheduled:
+                missionListView
+            case .planner:
+                MonthlyCalendarView()
+            case .completed:
                 ArchiveView(archivedMissions: mainViewModel.archivedMissions)
-            } else {
-                List {
-                    ForEach(viewModel.filteredAndSortedMissions) { mission in
-                        MissionRowView(mission: mission)
-                    }
-                    .onDelete(perform: viewModel.deleteMission)
-                }
-                .listStyle(.plain)
             }
         }
         .navigationTitle("Missions")
@@ -70,7 +67,164 @@ struct MissionsView: View {
              )
          }
     }
+    
+    private var missionListView: some View {
+        List {
+            ForEach(viewModel.filteredAndSortedMissions) { mission in
+                MissionRowView(mission: mission)
+            }
+            .onDelete(perform: viewModel.deleteMission)
+        }
+        .listStyle(.plain)
+    }
 }
+
+
+// MARK: - Monthly Calendar View
+struct MonthlyCalendarView: View {
+    @EnvironmentObject var viewModel: MissionsViewModel
+    @State private var date = Date()
+    
+    private var days: [Date] {
+        generateDaysInMonth(for: date)
+    }
+    
+    private let calendar = Calendar.current
+    
+    var body: some View {
+        VStack {
+            // Header with month navigation
+            HStack {
+                Button(action: {
+                    date = calendar.date(byAdding: .month, value: -1, to: date) ?? date
+                }) {
+                    Image(systemName: "chevron.left")
+                }
+                Spacer()
+                Text(date.formatted(.dateTime.month(.wide).year()))
+                    .font(.title2.bold())
+                Spacer()
+                Button(action: {
+                    date = calendar.date(byAdding: .month, value: 1, to: date) ?? date
+                }) {
+                    Image(systemName: "chevron.right")
+                }
+            }
+            .padding()
+
+            // Header for weekday names
+            let weekdaySymbols = calendar.shortWeekdaySymbols
+            HStack {
+                ForEach(weekdaySymbols, id: \.self) { symbol in
+                    Text(symbol)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal)
+
+            // Grid for the days and missions
+            LazyVGrid(columns: Array(repeating: GridItem(), count: 7)) {
+                ForEach(days, id: \.self) { day in
+                    CalendarDayCell(
+                        day: day,
+                        missions: viewModel.missions(for: day),
+                        isFaded: !calendar.isDate(day, equalTo: date, toGranularity: .month)
+                    )
+                }
+            }
+        }
+        .background(Color.groupedBackground)
+    }
+    
+    private func generateDaysInMonth(for date: Date) -> [Date] {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: date) else {
+            return []
+        }
+        let firstDayOfMonth = monthInterval.start.startOfDay(using: calendar)
+
+        let firstWeekday = calendar.component(.weekday, from: firstDayOfMonth)
+        let daysToAddBefore = (firstWeekday - calendar.firstWeekday + 7) % 7
+        
+        guard let startingDay = calendar.date(byAdding: .day, value: -daysToAddBefore, to: firstDayOfMonth) else {
+            return []
+        }
+        
+        var allDays: [Date] = []
+        for i in 0..<42 {
+            if let day = calendar.date(byAdding: .day, value: i, to: startingDay) {
+                allDays.append(day)
+            }
+        }
+        return allDays
+    }
+}
+
+struct CalendarDayCell: View {
+    let day: Date
+    let missions: [Mission]
+    let isFaded: Bool
+    
+    private let calendar = Calendar.current
+    private var isToday: Bool { calendar.isDateInToday(day) }
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            // --- EDITED: Content is now conditional ---
+            if !isFaded {
+                Text(day.formatted(.dateTime.day()))
+                    .font(.subheadline.weight(isToday ? .heavy : .regular))
+                    .frame(width: 24, height: 24)
+                    .background(isToday ? Color.accentColor : Color.clear)
+                    .foregroundColor(isToday ? .white : .primary)
+                    .clipShape(Circle())
+                
+                VStack(spacing: 4) {
+                    if missions.isEmpty {
+                        Spacer()
+                    } else {
+                        ForEach(missions) { mission in
+                            Text(mission.topicName)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .padding(.vertical, 3)
+                                .padding(.horizontal, 5)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.blue.opacity(0.2))
+                                .cornerRadius(4)
+                        }
+                        Spacer()
+                    }
+                }
+            } else {
+                // If the day is not in the current month, show an empty spacer
+                Spacer()
+            }
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 100)
+        .background(Color.secondaryBackground)
+        .cornerRadius(8)
+        // Make the entire cell invisible if it's a faded day
+        .opacity(isFaded ? 0 : 1)
+    }
+}
+
+fileprivate extension Date {
+    func startOfDay(using calendar: Calendar) -> Date {
+        calendar.startOfDay(for: self)
+    }
+}
+
+fileprivate extension Color {
+    #if os(macOS)
+    static var groupedBackground = Color(NSColor.windowBackgroundColor)
+    static var secondaryBackground = Color(NSColor.controlBackgroundColor)
+    #else
+    static var groupedBackground = Color(.systemGroupedBackground)
+    static var secondaryBackground = Color(.secondarySystemGroupedBackground)
+    #endif
+}
+
 
 // MARK: - Mission Row View
 struct MissionRowView: View {
@@ -255,7 +409,6 @@ struct MissionRowView: View {
         }
     }
     
-    // --- EDITED: Added a clamp to ensure the progress value is never out of bounds ---
     private var overallProgressValue: Double {
         guard mission.isPomodoro else { return 0 }
         
@@ -269,7 +422,6 @@ struct MissionRowView: View {
         
         let value = completedCyclesTime + currentCycleTime
         
-        // This clamp prevents the value from going below 0 or above the total.
         return max(0, min(value, mission.totalDuration))
     }
     
