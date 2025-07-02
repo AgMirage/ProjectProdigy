@@ -76,21 +76,26 @@ enum StudyType: String, Codable, CaseIterable {
 }
 
 
-// --- EDITED: Converted Mission from a struct to a class ---
 /// Represents a single study task created by the user.
 class Mission: ObservableObject, Identifiable, Codable, Hashable {
     let id: UUID
     let subjectName: String
     let branchName: String
-    let topicName: String
-    let studyType: StudyType
+    // --- EDITED: Changed to var ---
+    var topicName: String
+    // --- EDITED: Changed to var ---
+    var studyType: StudyType
     let creationDate: Date
-    let totalDuration: TimeInterval
-    let isPomodoro: Bool
+    // --- EDITED: Changed to var ---
+    var totalDuration: TimeInterval
+    // --- EDITED: Changed to var ---
+    var isPomodoro: Bool
     let isBossBattle: Bool
     let goldWager: Int?
-    let xpReward: Double
-    let goldReward: Int
+    // --- EDITED: Changed to var ---
+    var xpReward: Double
+    // --- EDITED: Changed to var ---
+    var goldReward: Int
     
     @Published var scheduledDate: Date?
     @Published var timeRemaining: TimeInterval
@@ -104,7 +109,6 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
     @Published var timePaused: TimeInterval
     @Published var battleType: BossBattleType?
     
-    // --- NEW: Properties for the "Finish the Cycle" bonus ---
     @Published var isEligibleForCycleBonus: Bool
     @Published var isFinishingForBonus: Bool
 
@@ -119,7 +123,7 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         lhs.id == rhs.id
     }
     
-    // --- Manual implementation of Codable ---
+    // Manual implementation of Codable
     enum CodingKeys: String, CodingKey {
         case id, subjectName, branchName, topicName, studyType, creationDate, scheduledDate, totalDuration, timeRemaining, status, isPomodoro, pomodoroCycle, isBreakTime, isBossBattle, goldWager, xpReward, goldReward, source, isPinned, difficulty, allowedPauseTime, timePaused, battleType, isEligibleForCycleBonus, isFinishingForBonus
     }
@@ -150,7 +154,6 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         timePaused = try container.decode(TimeInterval.self, forKey: .timePaused)
         battleType = try container.decodeIfPresent(BossBattleType.self, forKey: .battleType)
         
-        // --- NEW ---
         isEligibleForCycleBonus = try container.decodeIfPresent(Bool.self, forKey: .isEligibleForCycleBonus) ?? false
         isFinishingForBonus = try container.decodeIfPresent(Bool.self, forKey: .isFinishingForBonus) ?? false
     }
@@ -181,12 +184,10 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         try container.encode(timePaused, forKey: .timePaused)
         try container.encodeIfPresent(battleType, forKey: .battleType)
         
-        // --- NEW ---
         try container.encode(isEligibleForCycleBonus, forKey: .isEligibleForCycleBonus)
         try container.encode(isFinishingForBonus, forKey: .isFinishingForBonus)
     }
 
-    // Custom initializer to maintain ease of creation
     init(id: UUID, subjectName: String, branchName: String, topicName: String, studyType: StudyType, creationDate: Date, scheduledDate: Date? = nil, totalDuration: TimeInterval, timeRemaining: TimeInterval, status: MissionStatus, isPomodoro: Bool = false, pomodoroCycle: Int = 0, isBreakTime: Bool = false, isBossBattle: Bool = false, goldWager: Int? = nil, xpReward: Double, goldReward: Int, source: MissionSource = .manual, isPinned: Bool = false, difficulty: MissionDifficulty = .medium, allowedPauseTime: TimeInterval? = nil, timePaused: TimeInterval = 0, battleType: BossBattleType? = nil, isEligibleForCycleBonus: Bool = false, isFinishingForBonus: Bool = false) {
         self.id = id
         self.subjectName = subjectName
@@ -212,7 +213,6 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         self.timePaused = timePaused
         self.battleType = battleType
         
-        // --- NEW ---
         self.isEligibleForCycleBonus = isEligibleForCycleBonus
         self.isFinishingForBonus = isFinishingForBonus
     }

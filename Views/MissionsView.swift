@@ -31,7 +31,24 @@ struct MissionsView: View {
             case .active, .scheduled:
                 missionListView
             case .planner:
-                MonthlyCalendarView()
+                VStack {
+                    Picker("Planner View", selection: $viewModel.plannerViewType.animation()) {
+                        ForEach(PlannerViewType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+
+                    switch viewModel.plannerViewType {
+                    case .month:
+                        MonthlyCalendarView(date: $viewModel.selectedDate)
+                    case .week:
+                        WeeklyCalendarView(date: $viewModel.selectedDate)
+                    case .day:
+                        DailyAgendaView(date: $viewModel.selectedDate)
+                    }
+                }
             case .completed:
                 ArchiveView(archivedMissions: mainViewModel.archivedMissions)
             }
@@ -56,6 +73,11 @@ struct MissionsView: View {
                     viewModel.knowledgeTree = knowledgeTreeViewModel.subjects
                 }
         }
+        .sheet(item: $viewModel.missionToEdit) { mission in
+            if let index = viewModel.activeMissions.firstIndex(where: { $0.id == mission.id }) {
+                EditMissionView(mission: $viewModel.activeMissions[index])
+            }
+        }
         .sheet(item: $mainViewModel.missionToReview) { mission in
              MissionReviewView(
                  mission: mission,
@@ -79,11 +101,252 @@ struct MissionsView: View {
     }
 }
 
+// MARK: - Planner Views (Monthly, Weekly, Daily)
 
-// MARK: - Monthly Calendar View
+// --- EDITED: Logic inside timeString is corrected ---
+private struct CalendarDisplayEntry: Identifiable, Hashable {
+    let id: String
+    let date: Date
+    let title: String
+    let description: String
+    let color: Color
+    let iconName: String?
+    let baseMission: Mission?
+
+    init(mission: Mission) {
+        self.id = mission.id.uuidString
+        self.date = mission.scheduledDate ?? mission.creationDate
+        self.title = mission.topicName
+        self.baseMission = mission
+        
+        if mission.isBossBattle {
+            self.description = mission.battleType?.rawValue ?? "Boss Battle"
+            self.color = .red
+            self.iconName = "crown.fill"
+        } else {
+            self.description = mission.branchName
+            self.color = mission.source.color
+            self.iconName = mission.source == .dungeon ? "shield.lefthalf.filled" : nil
+        }
+    }
+    
+    init(event: Event) {
+        self.id = event.id
+        self.date = event.startDate
+        self.title = event.name
+        self.description = "Special Event"
+        self.color = .cyan
+        self.iconName = "star.fill"
+        self.baseMission = nil
+    }
+    
+    var timeString: String {
+        // Events are always all-day. Missions have specific times.
+        if baseMission == nil {
+            return "All Day"
+        } else {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    static func == (lhs: CalendarDisplayEntry, rhs: CalendarDisplayEntry) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+struct DailyAgendaView: View {
+    @EnvironmentObject var viewModel: MissionsViewModel
+    @Binding var date: Date
+    
+    private var entries: [CalendarDisplayEntry] {
+        let missions = viewModel.missions(for: date)
+        let bosses = viewModel.bossBattles(for: date)
+        let events = viewModel.events(for: date)
+        
+        let allEntries = missions.map(CalendarDisplayEntry.init) +
+                         bosses.map(CalendarDisplayEntry.init) +
+                         events.map(CalendarDisplayEntry.init)
+        
+        return allEntries.sorted(by: { $0.date < $1.date })
+    }
+
+    var body: some View {
+        VStack {
+            HStack {
+                Button(action: {
+                    date = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date
+                }) {
+                    Image(systemName: "chevron.left")
+                }
+                Spacer()
+                Text(date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                    .font(.title2.bold())
+                Spacer()
+                Button(action: {
+                    date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
+                }) {
+                    Image(systemName: "chevron.right")
+                }
+            }
+            .padding()
+            
+            if entries.isEmpty {
+                 Spacer()
+                 Text("No scheduled items for this day.")
+                     .foregroundColor(.secondary)
+                 Spacer()
+            } else {
+                List(entries) { entry in
+                    Button(action: {
+                        if let mission = entry.baseMission {
+                            viewModel.missionToEdit = mission
+                        }
+                    }) {
+                        HStack(spacing: 15) {
+                            Text(entry.timeString)
+                                .font(.subheadline.monospaced())
+                                .frame(width: 80, alignment: .leading)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    if let icon = entry.iconName {
+                                        Image(systemName: icon).foregroundColor(entry.color)
+                                    }
+                                    Text(entry.title)
+                                        .font(.headline)
+                                }
+                                Text(entry.description)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(entry.color.opacity(0.2))
+                            .cornerRadius(8)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .listRowSeparator(.hidden)
+                    .disabled(entry.baseMission == nil)
+                }
+                .listStyle(.plain)
+            }
+        }
+    }
+}
+
+struct WeeklyCalendarView: View {
+    @EnvironmentObject var viewModel: MissionsViewModel
+    @Binding var date: Date
+
+    private var weekDays: [Date] {
+        guard let weekInterval = Calendar.current.dateInterval(of: .weekOfYear, for: date) else { return [] }
+        var days: [Date] = []
+        for i in 0..<7 {
+            if let day = Calendar.current.date(byAdding: .day, value: i, to: weekInterval.start) {
+                days.append(day)
+            }
+        }
+        return days
+    }
+    
+    private var weekIntervalString: String {
+        guard let first = weekDays.first, let last = weekDays.last else { return "" }
+        let calendar = Calendar.current
+        if calendar.isDate(first, equalTo: last, toGranularity: .month) {
+            return "\(first.formatted(.dateTime.month().day())) - \(last.formatted(.dateTime.day()))"
+        }
+        return "\(first.formatted(.dateTime.month().day())) - \(last.formatted(.dateTime.month().day()))"
+    }
+
+    var body: some View {
+        VStack {
+            HStack {
+                Button(action: {
+                    date = Calendar.current.date(byAdding: .day, value: -7, to: date) ?? date
+                }) {
+                    Image(systemName: "chevron.left")
+                }
+                Spacer()
+                VStack {
+                    Text(date.formatted(.dateTime.month(.wide).year()))
+                        .font(.title2.bold())
+                    Text(weekIntervalString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button(action: {
+                    date = Calendar.current.date(byAdding: .day, value: 7, to: date) ?? date
+                }) {
+                    Image(systemName: "chevron.right")
+                }
+            }
+            .padding()
+
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(weekDays, id: \.self) { day in
+                    DayColumnView(day: day)
+                        .onTapGesture {
+                            viewModel.selectedDate = day
+                            viewModel.plannerViewType = .day
+                        }
+                }
+            }
+            Spacer()
+        }
+    }
+}
+
+struct DayColumnView: View {
+    @EnvironmentObject var viewModel: MissionsViewModel
+    let day: Date
+    
+    private var isToday: Bool { Calendar.current.isDateInToday(day) }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(day.formatted(.dateTime.weekday(.abbreviated)).uppercased())
+                .font(.caption.bold())
+                .foregroundColor(isToday ? .accentColor : .secondary)
+            
+            Text(day.formatted(.dateTime.day()))
+                .font(.subheadline.bold())
+                .padding(4)
+                .background(isToday ? Color.accentColor : Color.clear)
+                .foregroundColor(isToday ? .white : .primary)
+                .clipShape(Circle())
+            
+            let missions = viewModel.missions(for: day)
+            let bosses = viewModel.bossBattles(for: day)
+            let events = viewModel.events(for: day)
+            
+            if !bosses.isEmpty {
+                Circle().frame(width: 6, height: 6).foregroundColor(.red)
+            }
+            if !events.isEmpty {
+                Circle().frame(width: 6, height: 6).foregroundColor(.cyan)
+            }
+            if !missions.isEmpty {
+                 Circle().frame(width: 6, height: 6).foregroundColor(.blue)
+            }
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, minHeight: 70)
+        .background(isToday ? Color.accentColor.opacity(0.1) : Color.clear)
+        .cornerRadius(8)
+    }
+}
+
+
 struct MonthlyCalendarView: View {
     @EnvironmentObject var viewModel: MissionsViewModel
-    @State private var date = Date()
+    @State private var selectedEvent: Event?
+    @Binding var date: Date
     
     private var days: [Date] {
         generateDaysInMonth(for: date)
@@ -93,7 +356,6 @@ struct MonthlyCalendarView: View {
     
     var body: some View {
         VStack {
-            // Header with month navigation
             HStack {
                 Button(action: {
                     date = calendar.date(byAdding: .month, value: -1, to: date) ?? date
@@ -112,7 +374,6 @@ struct MonthlyCalendarView: View {
             }
             .padding()
 
-            // Header for weekday names
             let weekdaySymbols = calendar.shortWeekdaySymbols
             HStack {
                 ForEach(weekdaySymbols, id: \.self) { symbol in
@@ -123,18 +384,29 @@ struct MonthlyCalendarView: View {
             }
             .padding(.horizontal)
 
-            // Grid for the days and missions
             LazyVGrid(columns: Array(repeating: GridItem(), count: 7)) {
                 ForEach(days, id: \.self) { day in
                     CalendarDayCell(
                         day: day,
                         missions: viewModel.missions(for: day),
-                        isFaded: !calendar.isDate(day, equalTo: date, toGranularity: .month)
+                        events: viewModel.events(for: day),
+                        bossBattles: viewModel.bossBattles(for: day),
+                        isFaded: !calendar.isDate(day, equalTo: date, toGranularity: .month),
+                        onBackgroundTap: { date in
+                            self.date = date
+                            viewModel.plannerViewType = .day
+                        },
+                        onEventTap: { event in
+                            self.selectedEvent = event
+                        }
                     )
                 }
             }
         }
         .background(Color.groupedBackground)
+        .sheet(item: $selectedEvent) { event in
+            EventDetailSheet(event: event)
+        }
     }
     
     private func generateDaysInMonth(for date: Date) -> [Date] {
@@ -160,17 +432,178 @@ struct MonthlyCalendarView: View {
     }
 }
 
+// MARK: - New and Helper Views
+
+struct EditMissionView: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var viewModel: MissionsViewModel
+    
+    @Binding var mission: Mission
+    
+    @State private var scheduledDate: Date
+    @State private var missionHours: Int
+    @State private var missionMinutes: Int
+    @State private var studyType: StudyType
+
+    init(mission: Binding<Mission>) {
+        self._mission = mission
+        
+        _scheduledDate = State(initialValue: mission.wrappedValue.scheduledDate ?? Date())
+        let totalSeconds = mission.wrappedValue.totalDuration
+        _missionHours = State(initialValue: Int(totalSeconds) / 3600)
+        _missionMinutes = State(initialValue: (Int(totalSeconds) % 3600) / 60)
+        _studyType = State(initialValue: mission.wrappedValue.studyType)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Mission Details")) {
+                    Text("Topic: \(mission.topicName)")
+                        .foregroundColor(.secondary)
+                    
+                    let subjectCategory = viewModel.knowledgeTree.first { $0.name == mission.subjectName }?.category
+                    let availableTypes = StudyType.allCases.filter { $0.categories.contains(subjectCategory ?? .stem) }
+                    
+                    Picker("Study Type", selection: $studyType) {
+                        ForEach(availableTypes, id: \.self) { type in
+                            Text(type.displayString).tag(type)
+                        }
+                    }
+                }
+                
+                Section(header: Text("Reschedule Mission")) {
+                    DatePicker("New Scheduled Time", selection: $scheduledDate, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                }
+                
+                Section(header: Text("Adjust Duration")) {
+                     HStack {
+                        Text("Duration")
+                        Spacer()
+                        Picker("Hours", selection: $missionHours) { ForEach(0..<24) { Text("\($0) hr").tag($0) } }.pickerStyle(.menu)
+                        Picker("Minutes",selection: $missionMinutes) { ForEach(1..<60) { Text("\($0) min").tag($0) } }.pickerStyle(.menu)
+                    }
+                }
+                
+                Section {
+                    Button("Save Changes") {
+                        mission.scheduledDate = scheduledDate
+                        let newDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
+                        mission.totalDuration = newDuration
+                        mission.timeRemaining = newDuration
+                        mission.studyType = studyType
+                        
+                        dismiss()
+                    }
+                    .disabled(missionHours == 0 && missionMinutes < 5)
+                }
+            }
+            .navigationTitle("Edit Mission")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+
+struct EventDetailSheet: View {
+    let event: Event
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 15) {
+                    Image(event.bannerImageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 150)
+                        .clipped()
+
+                    Text(event.description)
+                        .padding(.horizontal)
+
+                    VStack(alignment: .leading) {
+                        Text("Rewards").font(.headline)
+                        ForEach(event.rewards) { reward in
+                            HStack {
+                                Image(reward.iconName)
+                                    .resizable().scaledToFit().frame(width: 25, height: 25)
+                                Text(reward.name)
+                            }
+                        }
+                    }
+                    .padding()
+                    .background(Color.secondaryBackground)
+                    .cornerRadius(10)
+                    .padding(.horizontal)
+
+                }
+            }
+            .navigationTitle(event.name)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 struct CalendarDayCell: View {
+    @EnvironmentObject var viewModel: MissionsViewModel
     let day: Date
     let missions: [Mission]
+    let events: [Event]
+    let bossBattles: [Mission]
     let isFaded: Bool
+    
+    let onBackgroundTap: (Date) -> Void
+    let onEventTap: (Event) -> Void
     
     private let calendar = Calendar.current
     private var isToday: Bool { calendar.isDateInToday(day) }
     
+    private var dayComponents: DateComponents {
+        calendar.dateComponents([.year, .month, .day], from: day)
+    }
+    private var weekday: Weekday? {
+        Weekday(rawValue: calendar.component(.weekday, from: day))
+    }
+    private var isTicketUsed: Bool {
+        viewModel.noStudyDays.contains(dayComponents)
+    }
+    private var canAffordTicket: Bool {
+        (viewModel.mainViewModel?.player.gold ?? 0) >= 250
+    }
+    private var isStudyDay: Bool {
+        guard let weekday = weekday else { return false }
+        return viewModel.dailyMissionSettings.studyDays.contains(weekday)
+    }
+    private var isPastDate: Bool {
+        calendar.startOfDay(for: day) < calendar.startOfDay(for: Date())
+    }
+
+    private func colorForMission(_ mission: Mission) -> Color {
+        switch mission.source {
+        case .manual:    return .blue.opacity(0.2)
+        case .automatic: return .purple.opacity(0.2)
+        case .guild:     return .green.opacity(0.2)
+        case .dungeon:   return .orange.opacity(0.2)
+        }
+    }
+    
     var body: some View {
-        VStack(spacing: 4) {
-            // --- EDITED: Content is now conditional ---
+        VStack(alignment: .leading, spacing: 4) {
             if !isFaded {
                 Text(day.formatted(.dateTime.day()))
                     .font(.subheadline.weight(isToday ? .heavy : .regular))
@@ -179,33 +612,140 @@ struct CalendarDayCell: View {
                     .foregroundColor(isToday ? .white : .primary)
                     .clipShape(Circle())
                 
-                VStack(spacing: 4) {
-                    if missions.isEmpty {
-                        Spacer()
-                    } else {
-                        ForEach(missions) { mission in
-                            Text(mission.topicName)
-                                .font(.caption2)
-                                .lineLimit(1)
-                                .padding(.vertical, 3)
-                                .padding(.horizontal, 5)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.blue.opacity(0.2))
-                                .cornerRadius(4)
+                if isTicketUsed {
+                    ticketView
+                } else {
+                    ZStack(alignment: .bottom) {
+                        scheduledItemsView
+
+                        let hasBlockingTasks = !missions.isEmpty || !bossBattles.isEmpty
+                        if isStudyDay && !hasBlockingTasks && !isPastDate {
+                            suggestedStudyView
                         }
-                        Spacer()
                     }
                 }
+                
             } else {
-                // If the day is not in the current month, show an empty spacer
                 Spacer()
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 100)
         .background(Color.secondaryBackground)
         .cornerRadius(8)
-        // Make the entire cell invisible if it's a faded day
         .opacity(isFaded ? 0 : 1)
+        .contentShape(Rectangle())
+        .onTapGesture {
+             if !isFaded {
+                onBackgroundTap(day)
+            }
+        }
+        .contextMenu {
+            if !isFaded && !isTicketUsed && !isPastDate {
+                Button {
+                    viewModel.useNoStudyDayTicket(for: day)
+                } label: {
+                    Label("Use No-Study Day Ticket", systemImage: "ticket.fill")
+                }
+                .disabled(!canAffordTicket)
+            }
+        }
+    }
+    
+    private var ticketView: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Image(systemName: "ticket.fill")
+                    .font(.largeTitle)
+                    .foregroundColor(.green)
+                Spacer()
+            }
+            Text("Day Off!")
+                .font(.caption.bold())
+                .foregroundColor(.green)
+            Spacer()
+        }
+    }
+    
+    private var suggestedStudyView: some View {
+        Button(action: {
+            viewModel.scheduledDate = day
+            viewModel.isShowingCreateSheet = true
+        }) {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Image(systemName: "sparkles")
+                        .foregroundColor(.secondary)
+                    Text("Suggested Study Day")
+                        .font(.caption.bold())
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(style: StrokeStyle(lineWidth: 1, dash: [4]))
+                .foregroundColor(.secondary)
+                .allowsHitTesting(false)
+        )
+        .padding(4)
+    }
+    
+    private var scheduledItemsView: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(bossBattles) { battle in
+                    HStack(spacing: 4) {
+                        Image(systemName: "crown.fill").foregroundColor(.yellow)
+                        Text(battle.topicName).font(.caption2.bold()).lineLimit(1)
+                    }
+                    .padding(.vertical, 3).padding(.horizontal, 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.red.opacity(0.3)).cornerRadius(4)
+                }
+                ForEach(events) { event in
+                    Button(action: { onEventTap(event) }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "star.fill").foregroundColor(.cyan)
+                            Text(event.name).font(.caption2).lineLimit(1)
+                        }
+                    }
+                    .buttonStyle(.plain).padding(.vertical, 3).padding(.horizontal, 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.cyan.opacity(0.2)).cornerRadius(4)
+                }
+                ForEach(missions) { mission in
+                    HStack(spacing: 4) {
+                        if mission.source == .dungeon {
+                            Image(systemName: "shield.lefthalf.filled").font(.caption2).foregroundColor(.orange)
+                        }
+                        Text(mission.topicName).font(.caption2).lineLimit(1)
+                    }
+                    .padding(.vertical, 3).padding(.horizontal, 5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(colorForMission(mission)).cornerRadius(4)
+                }
+            }
+        }
+    }
+}
+
+fileprivate extension MissionSource {
+    var color: Color {
+        switch self {
+        case .manual:    return .blue
+        case .automatic: return .purple
+        case .guild:     return .green
+        case .dungeon:   return .orange
+        }
     }
 }
 
@@ -484,6 +1024,11 @@ struct CreateMissionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+            }
+            .onAppear {
+                if viewModel.scheduledDate != nil {
+                    isScheduling = true
                 }
             }
             .onChange(of: viewModel.missionHours) { _, _ in checkPomodoroEligibility() }

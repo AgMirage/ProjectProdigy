@@ -1,12 +1,18 @@
 import Foundation
 import Combine
 
-// --- EDITED: Added 'planner' case ---
 enum MissionListTab: String, CaseIterable {
     case active = "Active"
     case scheduled = "Scheduled"
     case planner = "Planner"
     case completed = "Completed"
+}
+
+enum PlannerViewType: String, CaseIterable, Identifiable {
+    case month = "Month"
+    case week = "Week"
+    case day = "Day"
+    var id: Self { self }
 }
 
 
@@ -21,6 +27,12 @@ class MissionsViewModel: ObservableObject {
     @Published var selectedTab: MissionListTab = .active
     @Published var sourceFilter: MissionSource? = nil
     
+    @Published var plannerViewType: PlannerViewType = .month
+    @Published var selectedDate: Date = Date()
+    
+    // --- NEW: For presenting the mission editor ---
+    @Published var missionToEdit: Mission?
+    
     @Published var selectedSubject: Subject?
     @Published var selectedBranch: KnowledgeBranch?
     @Published var selectedTopic: KnowledgeTopic?
@@ -34,6 +46,12 @@ class MissionsViewModel: ObservableObject {
     
     @Published var conflictingMission: Mission?
     @Published var showConflictAlert = false
+    
+    @Published var events: [Event] = []
+    private let eventManager = EventManager()
+    
+    @Published var noStudyDays: Set<DateComponents> = []
+
 
     var canEnablePomodoro: Bool {
         let totalDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
@@ -53,7 +71,6 @@ class MissionsViewModel: ObservableObject {
             missions = activeMissions.filter {
                 $0.status == .inProgress || $0.status == .paused || $0.status == .pending
             }
-        // --- EDITED: Planner tab is handled by a separate view ---
         case .scheduled, .planner:
             missions = activeMissions.filter { $0.status == .scheduled }
         case .completed:
@@ -86,7 +103,7 @@ class MissionsViewModel: ObservableObject {
     
     private var timer: AnyCancellable?
     private var scheduleCheckTimer: AnyCancellable?
-    private weak var mainViewModel: MainViewModel?
+    var mainViewModel: MainViewModel?
     
     // MARK: - Initialization
     
@@ -100,6 +117,8 @@ class MissionsViewModel: ObservableObject {
         self.dailyMissionSettings = dailyManager.settings
         self.activeMissions.append(contentsOf: newDailyMissions)
         
+        self.events = eventManager.activeEvents + eventManager.upcomingEvents
+        
         self.scheduleCheckTimer = Timer.publish(every: 5, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -109,17 +128,52 @@ class MissionsViewModel: ObservableObject {
     
     // MARK: - Public Helper for Calendar
     
-    // --- NEW: Function to get sorted missions for a specific day ---
     func missions(for day: Date) -> [Mission] {
         let calendar = Calendar.current
         return activeMissions.filter { mission in
-            guard let scheduledDate = mission.scheduledDate, mission.status == .scheduled else {
+            guard !mission.isBossBattle,
+                  let scheduledDate = mission.scheduledDate,
+                  mission.status == .scheduled else {
                 return false
             }
             return calendar.isDate(scheduledDate, inSameDayAs: day)
         }
         .sorted { ($0.scheduledDate ?? Date()) < ($1.scheduledDate ?? Date()) }
     }
+    
+    func events(for day: Date) -> [Event] {
+        let calendar = Calendar.current
+        return events.filter { event in
+            let startOfDay = calendar.startOfDay(for: day)
+            return startOfDay >= calendar.startOfDay(for: event.startDate) && startOfDay < calendar.startOfDay(for: event.endDate)
+        }
+    }
+
+    func bossBattles(for day: Date) -> [Mission] {
+        let calendar = Calendar.current
+        return activeMissions.filter { mission in
+            guard mission.isBossBattle, let battleDate = mission.scheduledDate else {
+                return false
+            }
+            return calendar.isDate(battleDate, inSameDayAs: day)
+        }
+    }
+    
+    func useNoStudyDayTicket(for date: Date) {
+        guard let mainVM = mainViewModel else { return }
+        
+        let ticketCost = 250
+        guard mainVM.player.gold >= ticketCost else {
+            print("Not enough gold to use No-Study Day Ticket")
+            return
+        }
+        mainVM.player.gold -= ticketCost
+        
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        noStudyDays.insert(components)
+        mainVM.addLogEntry("Used No-Study Day Ticket for \(date.formatted(.dateTime.month().day()))", color: .green)
+    }
+
 
     // MARK: - Reward Calculation
     
