@@ -3,7 +3,6 @@ import SwiftUI
 
 /// Represents the current state of a mission.
 enum MissionStatus: String, Codable, CaseIterable {
-    // --- EDITED: Added the 'scheduled' case ---
     case pending = "Pending", scheduled = "Scheduled", inProgress = "In Progress", paused = "Paused", completed = "Completed", failed = "Failed"
 }
 
@@ -81,20 +80,14 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
     let id: UUID
     let subjectName: String
     let branchName: String
-    // --- EDITED: Changed to var ---
     var topicName: String
-    // --- EDITED: Changed to var ---
     var studyType: StudyType
     let creationDate: Date
-    // --- EDITED: Changed to var ---
     var totalDuration: TimeInterval
-    // --- EDITED: Changed to var ---
     var isPomodoro: Bool
     let isBossBattle: Bool
     let goldWager: Int?
-    // --- EDITED: Changed to var ---
     var xpReward: Double
-    // --- EDITED: Changed to var ---
     var goldReward: Int
     
     @Published var scheduledDate: Date?
@@ -111,6 +104,17 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
     
     @Published var isEligibleForCycleBonus: Bool
     @Published var isFinishingForBonus: Bool
+    
+    @Published var focusRating: Int?
+    @Published var understandingRating: Int?
+    @Published var challengeText: String?
+    
+    @Published var pomodoroStudyDuration: TimeInterval?
+    @Published var pomodoroBreakDuration: TimeInterval?
+    @Published var actualTimeSpent: TimeInterval?
+    
+    // --- NEW: Property to store the completion date ---
+    @Published var completionDate: Date?
 
 
     // Conformance to Hashable
@@ -125,7 +129,7 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
     
     // Manual implementation of Codable
     enum CodingKeys: String, CodingKey {
-        case id, subjectName, branchName, topicName, studyType, creationDate, scheduledDate, totalDuration, timeRemaining, status, isPomodoro, pomodoroCycle, isBreakTime, isBossBattle, goldWager, xpReward, goldReward, source, isPinned, difficulty, allowedPauseTime, timePaused, battleType, isEligibleForCycleBonus, isFinishingForBonus
+        case id, subjectName, branchName, topicName, studyType, creationDate, scheduledDate, totalDuration, timeRemaining, status, isPomodoro, pomodoroCycle, isBreakTime, isBossBattle, goldWager, xpReward, goldReward, source, isPinned, difficulty, allowedPauseTime, timePaused, battleType, isEligibleForCycleBonus, isFinishingForBonus, focusRating, understandingRating, challengeText, pomodoroStudyDuration, pomodoroBreakDuration, actualTimeSpent, completionDate
     }
     
     required init(from decoder: Decoder) throws {
@@ -156,6 +160,16 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         
         isEligibleForCycleBonus = try container.decodeIfPresent(Bool.self, forKey: .isEligibleForCycleBonus) ?? false
         isFinishingForBonus = try container.decodeIfPresent(Bool.self, forKey: .isFinishingForBonus) ?? false
+        
+        focusRating = try container.decodeIfPresent(Int.self, forKey: .focusRating)
+        understandingRating = try container.decodeIfPresent(Int.self, forKey: .understandingRating)
+        challengeText = try container.decodeIfPresent(String.self, forKey: .challengeText)
+        
+        pomodoroStudyDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .pomodoroStudyDuration)
+        pomodoroBreakDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .pomodoroBreakDuration)
+        actualTimeSpent = try container.decodeIfPresent(TimeInterval.self, forKey: .actualTimeSpent)
+        
+        completionDate = try container.decodeIfPresent(Date.self, forKey: .completionDate)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -186,9 +200,19 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         
         try container.encode(isEligibleForCycleBonus, forKey: .isEligibleForCycleBonus)
         try container.encode(isFinishingForBonus, forKey: .isFinishingForBonus)
+        
+        try container.encodeIfPresent(focusRating, forKey: .focusRating)
+        try container.encodeIfPresent(understandingRating, forKey: .understandingRating)
+        try container.encodeIfPresent(challengeText, forKey: .challengeText)
+        
+        try container.encodeIfPresent(pomodoroStudyDuration, forKey: .pomodoroStudyDuration)
+        try container.encodeIfPresent(pomodoroBreakDuration, forKey: .pomodoroBreakDuration)
+        try container.encodeIfPresent(actualTimeSpent, forKey: .actualTimeSpent)
+        
+        try container.encodeIfPresent(completionDate, forKey: .completionDate)
     }
 
-    init(id: UUID, subjectName: String, branchName: String, topicName: String, studyType: StudyType, creationDate: Date, scheduledDate: Date? = nil, totalDuration: TimeInterval, timeRemaining: TimeInterval, status: MissionStatus, isPomodoro: Bool = false, pomodoroCycle: Int = 0, isBreakTime: Bool = false, isBossBattle: Bool = false, goldWager: Int? = nil, xpReward: Double, goldReward: Int, source: MissionSource = .manual, isPinned: Bool = false, difficulty: MissionDifficulty = .medium, allowedPauseTime: TimeInterval? = nil, timePaused: TimeInterval = 0, battleType: BossBattleType? = nil, isEligibleForCycleBonus: Bool = false, isFinishingForBonus: Bool = false) {
+    init(id: UUID, subjectName: String, branchName: String, topicName: String, studyType: StudyType, creationDate: Date, scheduledDate: Date? = nil, totalDuration: TimeInterval, timeRemaining: TimeInterval, status: MissionStatus, isPomodoro: Bool = false, pomodoroCycle: Int = 0, isBreakTime: Bool = false, isBossBattle: Bool = false, goldWager: Int? = nil, xpReward: Double, goldReward: Int, source: MissionSource = .manual, isPinned: Bool = false, difficulty: MissionDifficulty = .medium, allowedPauseTime: TimeInterval? = nil, timePaused: TimeInterval = 0, battleType: BossBattleType? = nil, isEligibleForCycleBonus: Bool = false, isFinishingForBonus: Bool = false, focusRating: Int? = nil, understandingRating: Int? = nil, challengeText: String? = nil, pomodoroStudyDuration: TimeInterval? = nil, pomodoroBreakDuration: TimeInterval? = nil, actualTimeSpent: TimeInterval? = nil, completionDate: Date? = nil) {
         self.id = id
         self.subjectName = subjectName
         self.branchName = branchName
@@ -215,6 +239,16 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
         
         self.isEligibleForCycleBonus = isEligibleForCycleBonus
         self.isFinishingForBonus = isFinishingForBonus
+        
+        self.focusRating = focusRating
+        self.understandingRating = understandingRating
+        self.challengeText = challengeText
+        
+        self.pomodoroStudyDuration = pomodoroStudyDuration
+        self.pomodoroBreakDuration = pomodoroBreakDuration
+        self.actualTimeSpent = actualTimeSpent
+        
+        self.completionDate = completionDate
     }
     
     static var sample: Mission { Mission(id: UUID(), subjectName: "Mathematics", branchName: "Calculus 1", topicName: "The Chain Rule", studyType: .solvingProblemSet, creationDate: Date(), totalDuration: 3600, timeRemaining: 3600, status: .pending, xpReward: 150, goldReward: 25) }

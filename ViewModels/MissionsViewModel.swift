@@ -30,7 +30,6 @@ class MissionsViewModel: ObservableObject {
     @Published var plannerViewType: PlannerViewType = .month
     @Published var selectedDate: Date = Date()
     
-    // --- NEW: For presenting the mission editor ---
     @Published var missionToEdit: Mission?
     
     @Published var selectedSubject: Subject?
@@ -265,7 +264,9 @@ class MissionsViewModel: ObservableObject {
             status: newStatus,
             isPomodoro: isPomodoroEnabled,
             xpReward: rewards.xp,
-            goldReward: rewards.gold
+            goldReward: rewards.gold,
+            pomodoroStudyDuration: isPomodoroEnabled ? dailyMissionSettings.pomodoroStudyDuration : nil,
+            pomodoroBreakDuration: isPomodoroEnabled ? dailyMissionSettings.pomodoroBreakDuration : nil
         )
         
         activeMissions.append(newMission)
@@ -327,7 +328,7 @@ class MissionsViewModel: ObservableObject {
         
         if mission.status == .pending {
             if mission.isPomodoro {
-                mission.timeRemaining = min(mission.totalDuration, dailyMissionSettings.pomodoroStudyDuration)
+                mission.timeRemaining = min(mission.totalDuration, mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration)
                 if mission.pomodoroCycle == 0 {
                     mission.pomodoroCycle = 1
                 }
@@ -346,8 +347,20 @@ class MissionsViewModel: ObservableObject {
         timer?.cancel()
     }
     
+    // --- EDITED: More accurate time calculation ---
     func completeMission(mission: Mission) {
         timer?.cancel()
+        
+        // Calculate the actual time spent
+        if mission.isPomodoro {
+            let studyDuration = mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration
+            let timeInCompletedCycles = Double(mission.pomodoroCycle - 1) * studyDuration
+            let timeInCurrentCycle = studyDuration - mission.timeRemaining
+            mission.actualTimeSpent = timeInCompletedCycles + timeInCurrentCycle
+        } else {
+            mission.actualTimeSpent = mission.totalDuration - mission.timeRemaining
+        }
+        
         mainViewModel?.completeMission(mission, xpGained: mission.xpReward, goldGained: mission.goldReward)
         activeMissions.removeAll { $0.id == mission.id }
     }
@@ -360,6 +373,7 @@ class MissionsViewModel: ObservableObject {
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.updateTimer() }
     }
     
+    // --- EDITED: More accurate time calculation for bonus completion ---
     func completeMissionForBonus(mission: Mission) {
         timer?.cancel()
         
@@ -375,6 +389,15 @@ class MissionsViewModel: ObservableObject {
             isPinned: mission.isPinned, difficulty: mission.difficulty
         )
         
+        if bonusMission.isPomodoro {
+            let studyDuration = bonusMission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration
+            let timeInCompletedCycles = Double(bonusMission.pomodoroCycle - 1) * studyDuration
+            let timeInCurrentCycle = studyDuration // Full cycle was completed for bonus
+            bonusMission.actualTimeSpent = timeInCompletedCycles + timeInCurrentCycle
+        } else {
+            bonusMission.actualTimeSpent = bonusMission.totalDuration
+        }
+        
         mainViewModel?.addLogEntry("Focus cycle finished! +10% Rewards!", color: .yellow)
         mainViewModel?.completeMission(bonusMission, xpGained: bonusXP, goldGained: bonusGold)
         activeMissions.removeAll { $0.id == mission.id }
@@ -383,7 +406,7 @@ class MissionsViewModel: ObservableObject {
     func retryMission(mission: Mission) {
         mission.status = .pending
         if mission.isPomodoro {
-            let customStudyDuration = dailyMissionSettings.pomodoroStudyDuration
+            let customStudyDuration = mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration
             mission.timeRemaining = min(mission.totalDuration, customStudyDuration)
         } else {
             mission.timeRemaining = mission.totalDuration
@@ -436,7 +459,7 @@ class MissionsViewModel: ObservableObject {
             mission.timeRemaining -= 1
         }
         
-        let studyDuration = dailyMissionSettings.pomodoroStudyDuration
+        let studyDuration = mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration
         let completedCyclesTime = Double(mission.pomodoroCycle - 1) * studyDuration
         let currentCycleProgress = studyDuration - mission.timeRemaining
         let totalTimeStudied = completedCyclesTime + currentCycleProgress
@@ -461,18 +484,18 @@ class MissionsViewModel: ObservableObject {
                 mission.isBreakTime = false
                 mission.pomodoroCycle += 1
                 
-                let remainingTotalDuration = mission.totalDuration - (Double(mission.pomodoroCycle - 1) * dailyMissionSettings.pomodoroStudyDuration)
-                mission.timeRemaining = min(remainingTotalDuration, dailyMissionSettings.pomodoroStudyDuration)
+                let remainingTotalDuration = mission.totalDuration - (Double(mission.pomodoroCycle - 1) * (mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration))
+                mission.timeRemaining = min(remainingTotalDuration, (mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration))
 
                 mainViewModel?.addLogEntry("Break's over! Starting Focus Cycle \(mission.pomodoroCycle).", color: .green)
                 startMission(mission: mission)
             } else {
-                let totalStudyTimeCompleted = Double(mission.pomodoroCycle) * dailyMissionSettings.pomodoroStudyDuration
+                let totalStudyTimeCompleted = Double(mission.pomodoroCycle) * (mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration)
                 if totalStudyTimeCompleted >= mission.totalDuration {
                     completeMission(mission: mission)
                 } else {
                     mission.isBreakTime = true
-                    mission.timeRemaining = dailyMissionSettings.pomodoroBreakDuration
+                    mission.timeRemaining = mission.pomodoroBreakDuration ?? dailyMissionSettings.pomodoroBreakDuration
                     mainViewModel?.addLogEntry("Focus Cycle complete! Time for a short break.", color: .blue)
                     pauseMission(mission: mission)
                 }

@@ -78,13 +78,13 @@ struct MissionsView: View {
                 EditMissionView(mission: $viewModel.activeMissions[index])
             }
         }
+        // --- EDITED: The call to submit and archive the review is simplified. ---
         .sheet(item: $mainViewModel.missionToReview) { mission in
              MissionReviewView(
                  mission: mission,
                  missionToReview: $mainViewModel.missionToReview,
                  onReviewSubmit: { focus, understanding, challenge in
-                     mainViewModel.submitMissionReview(for: mission.id, focus: focus, understanding: understanding, challenge: challenge)
-                     mainViewModel.archiveMission(mission)
+                     mainViewModel.submitMissionReview(for: mission, focus: focus, understanding: understanding, challenge: challenge)
                  }
              )
          }
@@ -103,7 +103,6 @@ struct MissionsView: View {
 
 // MARK: - Planner Views (Monthly, Weekly, Daily)
 
-// --- EDITED: Logic inside timeString is corrected ---
 private struct CalendarDisplayEntry: Identifiable, Hashable {
     let id: String
     let date: Date
@@ -141,7 +140,6 @@ private struct CalendarDisplayEntry: Identifiable, Hashable {
     }
     
     var timeString: String {
-        // Events are always all-day. Missions have specific times.
         if baseMission == nil {
             return "All Day"
         } else {
@@ -551,7 +549,7 @@ struct EventDetailSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
@@ -615,11 +613,12 @@ struct CalendarDayCell: View {
                 if isTicketUsed {
                     ticketView
                 } else {
-                    ZStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
                         scheduledItemsView
-
+                        
                         let hasBlockingTasks = !missions.isEmpty || !bossBattles.isEmpty
                         if isStudyDay && !hasBlockingTasks && !isPastDate {
+                            Spacer(minLength: 0)
                             suggestedStudyView
                         }
                     }
@@ -674,19 +673,15 @@ struct CalendarDayCell: View {
             viewModel.isShowingCreateSheet = true
         }) {
             VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Image(systemName: "sparkles")
-                        .foregroundColor(.secondary)
-                    Text("Suggested Study Day")
-                        .font(.caption.bold())
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                Spacer()
+                Image(systemName: "sparkles")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Suggested Study")
+                    .font(.caption2.bold())
+                    .foregroundColor(.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -696,7 +691,8 @@ struct CalendarDayCell: View {
                 .foregroundColor(.secondary)
                 .allowsHitTesting(false)
         )
-        .padding(4)
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
     }
     
     private var scheduledItemsView: some View {
@@ -737,6 +733,7 @@ struct CalendarDayCell: View {
         }
     }
 }
+
 
 fileprivate extension MissionSource {
     var color: Color {

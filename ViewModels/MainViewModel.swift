@@ -15,7 +15,7 @@ struct LogEntry: Identifiable, Hashable {
 }
 
 
-// MARK: - NEW: Procrastination Monster Mood
+// MARK: - Procrastination Monster Mood
 /// Represents the current mood of the Procrastination Monster.
 enum MonsterMood: String {
     case content, neutral, agitated, furious
@@ -69,7 +69,6 @@ class MainViewModel: ObservableObject {
     @Published var isShowingAvatarSelection = false
     @Published var isShowingFamiliarSelection = false
     
-    // --- EDITED: Computed property for Monster's Mood ---
     var monsterMood: MonsterMood {
         switch player.procrastinationMonsterValue {
         case 0..<2: return .content
@@ -109,8 +108,6 @@ class MainViewModel: ObservableObject {
         }
     }
     
-    // --- NEW: Function for direct interaction with the monster ---
-    /// Allows the player to directly interact with the monster to slightly lower its value.
     func petTheMonster() {
         guard player.procrastinationMonsterValue > 0 else {
             addLogEntry("The Procrastination Monster is already content.", color: .gray)
@@ -137,10 +134,11 @@ class MainViewModel: ObservableObject {
         addLogEntry("Mission Paused.", color: .orange)
     }
 
-    // --- EDITED: Updated function to account for monster's status effect ---
+    // --- EDITED: Sets the completionDate on the mission ---
     func completeMission(_ mission: Mission, xpGained: Double, goldGained: Int) {
         let completedMission = mission
         completedMission.status = .completed
+        completedMission.completionDate = Date() // Set the completion date
         
         self.activeMission = nil
         stopFamiliarXpTimer()
@@ -163,8 +161,21 @@ class MainViewModel: ObservableObject {
         
         player.gold += finalGold
         player.totalXP += finalXP
+        
+        // Update streak logic
+        if let lastDate = player.lastMissionCompletionDate {
+            if !Calendar.current.isDateInToday(lastDate) {
+                if Calendar.current.isDateInYesterday(lastDate) {
+                    player.checkInStreak += 1
+                } else {
+                    player.checkInStreak = 1 // Reset if not yesterday
+                }
+            }
+        } else {
+            player.checkInStreak = 1 // First mission ever
+        }
         player.lastMissionCompletionDate = Date()
-        player.checkInStreak += 1
+        
 
         addLogEntry("Mission Complete! +\(Int(finalXP)) XP, +\(finalGold) Gold.", color: .yellow)
 
@@ -180,10 +191,16 @@ class MainViewModel: ObservableObject {
         self.missionToReview = completedMission
     }
     
-    func submitMissionReview(for missionID: UUID, focus: Int, understanding: Int, challenge: String) {
+    func submitMissionReview(for mission: Mission, focus: Int, understanding: Int, challenge: String) {
         let bonusGold = 5
         player.gold += bonusGold
         addLogEntry("Review submitted! +\(bonusGold) Gold bonus.", color: .yellow)
+        
+        mission.focusRating = focus
+        mission.understandingRating = understanding
+        mission.challengeText = challenge.isEmpty ? nil : challenge
+        
+        archiveMission(mission)
     }
 
     func archiveMission(_ mission: Mission) {
@@ -274,12 +291,14 @@ class MainViewModel: ObservableObject {
         systemLog.insert(newEntry, at: 0)
     }
 
+    // --- EDITED: Correctly checks for consecutive days ---
     private func checkAndUpdateStreak() {
         guard let lastCompletionDate = player.lastMissionCompletionDate else {
             player.checkInStreak = 0
             return
         }
-        if !Calendar.current.isDateInToday(lastCompletionDate) && !Calendar.current.isDateInYesterday(lastCompletionDate) {
+        
+        if !Calendar.current.isDateInYesterday(lastCompletionDate) && !Calendar.current.isDateInToday(lastCompletionDate) {
             addLogEntry("Check-in streak has been reset to 0.", color: .red)
             player.checkInStreak = 0
         }
