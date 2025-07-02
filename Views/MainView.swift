@@ -132,17 +132,16 @@ struct MainDashboardView: View {
                 HStack(alignment: .bottom, spacing: 15) {
                     StreakView(streak: viewModel.player.checkInStreak)
                     
-                    FocusFamiliarView(
-                        familiar: viewModel.player.activeFamiliar,
-                        onSwapTap: { viewModel.isShowingFamiliarSelection = true }
-                    )
+                    NavigationLink(destination: FamiliarDetailView(familiar: viewModel.player.activeFamiliar)) {
+                        FocusFamiliarView(
+                            familiar: viewModel.player.activeFamiliar,
+                            onSwapTap: { viewModel.isShowingFamiliarSelection = true }
+                        )
+                    }
+                    .buttonStyle(.plain)
                     
-                    VStack {
-                        Text("Procrastination").font(.caption).bold()
-                        Image("monster_stage_1").resizable().scaledToFit().frame(height: 60)
-                            .scaleEffect(viewModel.procrastinationMonsterScale)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
-                    }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
+                    // --- EDITED: Procrastination Monster View ---
+                    ProcrastinationMonsterView()
                 }
                 
                 SystemLogView(logEntries: viewModel.systemLog)
@@ -157,7 +156,6 @@ struct MainDashboardView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.purple)
                 .padding()
-                // --- EDITED: Gating for Quick Mission button ---
                 .disabled(!viewModel.isQuickMissionUnlocked)
                 .overlay(
                     !viewModel.isQuickMissionUnlocked ?
@@ -173,7 +171,6 @@ struct MainDashboardView: View {
         .background(Color.groupedBackground)
         .navigationTitle("Dashboard")
         .sheet(isPresented: $isShowingTitlesSheet) { TitlesView() }
-        // --- NEW: Sheets for selection views ---
         .sheet(isPresented: $viewModel.isShowingAvatarSelection) { AvatarSelectionView() }
         .sheet(isPresented: $viewModel.isShowingFamiliarSelection) { FamiliarSelectionView() }
     }
@@ -182,7 +179,6 @@ struct MainDashboardView: View {
 // MARK: - Helper Views
 struct PlayerHeaderView: View {
     let player: Player
-    // --- EDITED: Separate closures for different taps ---
     let onAvatarTap: () -> Void
     let onTitleTap: () -> Void
     
@@ -190,7 +186,6 @@ struct PlayerHeaderView: View {
     
     var body: some View {
         HStack {
-            // --- EDITED: Avatar is now a button ---
             Button(action: onAvatarTap) {
                 Image(player.currentAvatar.imageName)
                     .resizable().scaledToFit().frame(width: 60, height: 60)
@@ -201,7 +196,6 @@ struct PlayerHeaderView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(player.username).font(.title2).bold()
-                    // --- EDITED: Achievements button is now a NavigationLink ---
                     NavigationLink(destination: AchievementsView(manager: mainViewModel.achievementManager)) {
                         Image(systemName: "trophy.fill")
                             .font(.headline)
@@ -209,7 +203,6 @@ struct PlayerHeaderView: View {
                     }
                 }
                 
-                // --- EDITED: Title is now a button ---
                 Button(action: onTitleTap) {
                     if let titleName = player.activeTitle?.name {
                         Text(titleName).font(.footnote).bold().foregroundColor(.purple)
@@ -231,7 +224,6 @@ struct PlayerHeaderView: View {
 
 struct FocusFamiliarView: View {
     let familiar: Familiar
-    // --- NEW: Closure for swap button ---
     let onSwapTap: () -> Void
     
     private var familiarImageName: String { return familiar.imageNamePrefix + "_stage_1" }
@@ -241,7 +233,6 @@ struct FocusFamiliarView: View {
             HStack {
                 Text(familiar.name).font(.caption).bold()
                 Spacer()
-                // --- NEW: Swap button ---
                 Button(action: onSwapTap) {
                     Image(systemName: "arrow.triangle.2.circlepath")
                 }
@@ -254,6 +245,47 @@ struct FocusFamiliarView: View {
         }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
     }
 }
+
+// --- NEW: Procrastination Monster View ---
+struct ProcrastinationMonsterView: View {
+    @EnvironmentObject var viewModel: MainViewModel
+    
+    var body: some View {
+        VStack {
+            Text("Procrastination")
+                .font(.caption).bold()
+            
+            Image(viewModel.monsterMood.imageName)
+                .resizable().scaledToFit().frame(height: 60)
+                .scaleEffect(viewModel.procrastinationMonsterScale)
+                .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
+            
+            if let effect = viewModel.monsterMood.statusEffectDescription {
+                Text(effect)
+                    .font(.caption2)
+                    .foregroundColor(viewModel.monsterMood.effectColor)
+                    .multilineTextAlignment(.center)
+            } else {
+                Text("Feeling neutral.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            Button(action: { viewModel.petTheMonster() }) {
+                Text("Pat")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .tint(.gray)
+            
+        }
+        .padding()
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .background(Color.secondaryBackground)
+        .cornerRadius(12)
+    }
+}
+
 
 struct StatsGridView: View {
     let stats: Stats

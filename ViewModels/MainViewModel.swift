@@ -15,6 +15,42 @@ struct LogEntry: Identifiable, Hashable {
 }
 
 
+// MARK: - NEW: Procrastination Monster Mood
+/// Represents the current mood of the Procrastination Monster.
+enum MonsterMood: String {
+    case content, neutral, agitated, furious
+    
+    /// The image associated with each mood.
+    var imageName: String {
+        switch self {
+        case .content: return "monster_content"
+        case .neutral: return "monster_neutral"
+        case .agitated: return "monster_agitated"
+        case .furious: return "monster_furious"
+        }
+    }
+    
+    /// The gameplay effect associated with each mood.
+    var statusEffectDescription: String? {
+        switch self {
+        case .content: return "+5% Gold from all missions."
+        case .agitated: return "-5% Gold from all missions."
+        case .furious: return "-10% Gold from all missions. XP gain disabled."
+        default: return nil
+        }
+    }
+    
+    /// The color to use for the mood's description text.
+    var effectColor: Color {
+        switch self {
+        case .content: return .green
+        case .agitated, .furious: return .red
+        default: return .secondary
+        }
+    }
+}
+
+
 // MARK: - Main View Model
 @MainActor
 class MainViewModel: ObservableObject {
@@ -32,6 +68,16 @@ class MainViewModel: ObservableObject {
     
     @Published var isShowingAvatarSelection = false
     @Published var isShowingFamiliarSelection = false
+    
+    // --- EDITED: Computed property for Monster's Mood ---
+    var monsterMood: MonsterMood {
+        switch player.procrastinationMonsterValue {
+        case 0..<2: return .content
+        case 2..<5: return .neutral
+        case 5..<8: return .agitated
+        default: return .furious
+        }
+    }
 
     var procrastinationMonsterScale: CGFloat {
         1.0 + (player.procrastinationMonsterValue * 0.1)
@@ -62,6 +108,19 @@ class MainViewModel: ObservableObject {
             }
         }
     }
+    
+    // --- NEW: Function for direct interaction with the monster ---
+    /// Allows the player to directly interact with the monster to slightly lower its value.
+    func petTheMonster() {
+        guard player.procrastinationMonsterValue > 0 else {
+            addLogEntry("The Procrastination Monster is already content.", color: .gray)
+            return
+        }
+        
+        let reduction = 0.5
+        player.procrastinationMonsterValue = max(0, player.procrastinationMonsterValue - reduction)
+        addLogEntry("You pet the Procrastination Monster. It seems a little calmer.", color: .cyan)
+    }
 
     // MARK: - Mission Lifecycle Control
 
@@ -78,7 +137,7 @@ class MainViewModel: ObservableObject {
         addLogEntry("Mission Paused.", color: .orange)
     }
 
-    // --- EDITED: Updated function to accept explicit rewards ---
+    // --- EDITED: Updated function to account for monster's status effect ---
     func completeMission(_ mission: Mission, xpGained: Double, goldGained: Int) {
         let completedMission = mission
         completedMission.status = .completed
@@ -86,12 +145,28 @@ class MainViewModel: ObservableObject {
         self.activeMission = nil
         stopFamiliarXpTimer()
 
-        player.gold += goldGained
-        player.totalXP += xpGained
+        // Apply status effects from the monster
+        var finalGold = goldGained
+        var finalXP = xpGained
+        
+        switch monsterMood {
+        case .content:
+            finalGold = Int(Double(finalGold) * 1.05)
+        case .agitated:
+            finalGold = Int(Double(finalGold) * 0.95)
+        case .furious:
+            finalGold = Int(Double(finalGold) * 0.90)
+            finalXP = 0 // Furious monster prevents XP gain
+        default:
+            break
+        }
+        
+        player.gold += finalGold
+        player.totalXP += finalXP
         player.lastMissionCompletionDate = Date()
         player.checkInStreak += 1
 
-        addLogEntry("Mission Complete! +\(Int(xpGained)) XP, +\(goldGained) Gold.", color: .yellow)
+        addLogEntry("Mission Complete! +\(Int(finalXP)) XP, +\(finalGold) Gold.", color: .yellow)
 
         achievementManager.processEvent(.missionCompleted, for: &player)
         achievementManager.processEvent(.goldEarned(totalAmount: player.gold), for: &player)
