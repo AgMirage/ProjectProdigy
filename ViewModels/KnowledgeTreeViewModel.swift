@@ -18,7 +18,6 @@ class KnowledgeTreeViewModel: ObservableObject {
             updateDisplayedBranches()
         }
     }
-    // --- EDITED: Changed to handle both unlocking and remastering ---
     @Published var branchToSetMastery: KnowledgeBranch?
     
     @Published var refreshID = UUID()
@@ -67,7 +66,6 @@ class KnowledgeTreeViewModel: ObservableObject {
             return
         }
         
-        // --- NEW: Apply permanent subject-specific XP boosts ---
         var finalXP = xp
         if let boostMultiplier = player.permanentXpBoosts[subjectName] {
             finalXP *= (1.0 + boostMultiplier)
@@ -90,20 +88,16 @@ class KnowledgeTreeViewModel: ObservableObject {
         guard var player = self.player, let mainVM = self.mainViewModel else { return }
         guard let (sIndex, bIndex) = findBranchIndices(for: branch.id) else { return }
 
-        // --- NEW: Remastering Logic ---
-        // If the branch is already mastered, this is a remaster action
         if fullTree[sIndex].branches[bIndex].isMastered {
-            // Apply the permanent stat boost if it's the first time remastering THIS subject
             let subjectName = findSubjectName(forBranch: branch.name) ?? ""
             if (player.permanentXpBoosts[subjectName] ?? 0.0) == 0.0 {
-                player.permanentXpBoosts[subjectName] = 0.005 // +0.5% XP
+                player.permanentXpBoosts[subjectName] = 0.005
                 mainVM.addLogEntry("Permanent Boost: +0.5% XP for all \(subjectName) missions!", color: .yellow)
             }
             
             fullTree[sIndex].branches[bIndex].remasterCount += 1
             mainVM.addLogEntry("Branch Remastered: '\(branch.name)'! Challenge increases!", color: .purple)
             
-            // Now, reset its progress. The new mastery level is set below.
             resetBranchProgress(branchID: branch.id, shouldUpdateView: false)
         }
         
@@ -160,7 +154,6 @@ class KnowledgeTreeViewModel: ObservableObject {
         fullTree[sIndex].branches[bIndex].currentXP = 0
         fullTree[sIndex].branches[bIndex].totalTimeSpent = 0
         fullTree[sIndex].branches[bIndex].missionsCompleted = 0
-        // Don't reset remasterCount here
         
         for i in 0..<fullTree[sIndex].branches[bIndex].topics.count {
             fullTree[sIndex].branches[bIndex].topics[i].isUnlocked = false
@@ -187,13 +180,58 @@ class KnowledgeTreeViewModel: ObservableObject {
         refreshID = UUID()
     }
 
+    func exportBranchDetailToCSV(branch: KnowledgeBranch) -> URL? {
+        let fileName = "\(branch.name.replacingOccurrences(of: " ", with: "_"))_Progress.csv"
+        let path = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(fileName)
+        
+        var csvText = "Metric,Current,Required\n"
+        
+        let masteryGoal = player?.branchMasteryLevels[branch.name]?.level ?? .standard
+        let totalMultiplier = (1.0 + (Double(branch.remasterCount) * 0.25)) * masteryGoal.multiplier
+        
+        let totalRequiredTime = branch.topics.reduce(0) { $0 + $1.timeRequired } * totalMultiplier
+        let totalRequiredXP = branch.topics.reduce(0) { $0 + $1.xpRequired } * totalMultiplier
+        let totalRequiredMissions = branch.topics.reduce(0) { $0 + Double($1.missionsRequired) } * totalMultiplier
+        
+        csvText += "Time Spent (hours),\(branch.totalTimeSpent / 3600),\(totalRequiredTime / 3600)\n"
+        csvText += "XP Earned,\(branch.currentXP),\(totalRequiredXP)\n"
+        csvText += "Missions Done,\(branch.missionsCompleted),\(totalRequiredMissions)\n"
+        csvText += "\n"
+        
+        csvText += "Topic,Status,Contributed XP,Contributed Time (hours),Contributed Missions\n"
+        for topic in branch.topics {
+            let status = topic.isUnlocked ? "Completed" : "Locked"
+            let xp = topic.isUnlocked ? "\(topic.xpRequired)" : "N/A"
+            let time = topic.isUnlocked ? "\(topic.timeRequired / 3600)" : "N/A"
+            let missions = topic.isUnlocked ? "\(topic.missionsRequired)" : "N/A"
+            csvText += "\(topic.name.replacingOccurrences(of: ",", with: "")),\(status),\(xp),\(time),\(missions)\n"
+        }
+        
+        do {
+            try csvText.write(to: path, atomically: true, encoding: .utf8)
+            return path
+        } catch {
+            print("Failed to create CSV file: \(error)")
+            return nil
+        }
+    }
+
     // MARK: - Private Helper Functions
+    
+    // --- NEW: Public helper to find a branch by ID ---
+    func findBranch(withID id: UUID) -> KnowledgeBranch? {
+        for subject in fullTree {
+            if let branch = subject.branches.first(where: { $0.id == id }) {
+                return branch
+            }
+        }
+        return nil
+    }
     
     private func checkForTopicUnlocks(inBranchIndex branchIndex: Int, inSubjectIndex subjectIndex: Int) {
         let branch = fullTree[subjectIndex].branches[branchIndex]
         guard branch.isUnlocked else { return }
 
-        // --- NEW: Apply remaster multiplier to requirements ---
         let remasterMultiplier = 1.0 + (Double(branch.remasterCount) * 0.25)
 
         for i in 0..<branch.topics.count {

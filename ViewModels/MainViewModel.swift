@@ -69,6 +69,9 @@ class MainViewModel: ObservableObject {
     @Published var isShowingAvatarSelection = false
     @Published var isShowingFamiliarSelection = false
     
+    // --- NEW: Reference to the KnowledgeTreeViewModel ---
+    var knowledgeTreeViewModel: KnowledgeTreeViewModel?
+    
     var monsterMood: MonsterMood {
         switch player.procrastinationMonsterValue {
         case 0..<2: return .content
@@ -134,16 +137,14 @@ class MainViewModel: ObservableObject {
         addLogEntry("Mission Paused.", color: .orange)
     }
 
-    // --- EDITED: Sets the completionDate on the mission ---
     func completeMission(_ mission: Mission, xpGained: Double, goldGained: Int) {
         let completedMission = mission
         completedMission.status = .completed
-        completedMission.completionDate = Date() // Set the completion date
+        completedMission.completionDate = Date()
         
         self.activeMission = nil
         stopFamiliarXpTimer()
 
-        // Apply status effects from the monster
         var finalGold = goldGained
         var finalXP = xpGained
         
@@ -154,7 +155,7 @@ class MainViewModel: ObservableObject {
             finalGold = Int(Double(finalGold) * 0.95)
         case .furious:
             finalGold = Int(Double(finalGold) * 0.90)
-            finalXP = 0 // Furious monster prevents XP gain
+            finalXP = 0
         default:
             break
         }
@@ -162,20 +163,28 @@ class MainViewModel: ObservableObject {
         player.gold += finalGold
         player.totalXP += finalXP
         
-        // Update streak logic
         if let lastDate = player.lastMissionCompletionDate {
             if !Calendar.current.isDateInToday(lastDate) {
                 if Calendar.current.isDateInYesterday(lastDate) {
                     player.checkInStreak += 1
                 } else {
-                    player.checkInStreak = 1 // Reset if not yesterday
+                    player.checkInStreak = 1
                 }
             }
         } else {
-            player.checkInStreak = 1 // First mission ever
+            player.checkInStreak = 1
         }
         player.lastMissionCompletionDate = Date()
         
+        // --- NEW: Add progress to the Knowledge Tree ---
+        if let timeSpent = mission.actualTimeSpent, timeSpent > 0 {
+            knowledgeTreeViewModel?.addProgress(
+                to: mission.branchName,
+                in: mission.subjectName,
+                xp: finalXP,
+                time: timeSpent
+            )
+        }
 
         addLogEntry("Mission Complete! +\(Int(finalXP)) XP, +\(finalGold) Gold.", color: .yellow)
 
@@ -216,9 +225,6 @@ class MainViewModel: ObservableObject {
 
 
     func completeTestMission() {
-        // This function would now need to be updated if used, to pass the explicit rewards.
-        // For now, we leave it as is, but it would not compile without adjustment.
-        // self.completeMission(Mission.sample, xpGained: Mission.sample.xpReward, goldGained: Mission.sample.goldReward)
     }
     
     private func handleDungeonStageCompletion(for completedMission: Mission) {
@@ -291,7 +297,6 @@ class MainViewModel: ObservableObject {
         systemLog.insert(newEntry, at: 0)
     }
 
-    // --- EDITED: Correctly checks for consecutive days ---
     private func checkAndUpdateStreak() {
         guard let lastCompletionDate = player.lastMissionCompletionDate else {
             player.checkInStreak = 0

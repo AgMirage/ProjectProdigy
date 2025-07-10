@@ -1,10 +1,18 @@
 import SwiftUI
 
+// --- NEW: Wrapper struct to make UUID Identifiable ---
+struct BranchIdentifier: Identifiable {
+    let id: UUID
+}
+
 struct KnowledgeTreeView: View {
     
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     @EnvironmentObject var mainViewModel: MainViewModel
     
+    // --- EDITED: Use the new Identifiable wrapper ---
+    @State private var branchIDForDetailView: BranchIdentifier?
+
     var body: some View {
         NavigationStack {
             HStack(spacing: 0) {
@@ -14,7 +22,7 @@ struct KnowledgeTreeView: View {
                 )
                 
                 if let selectedSubject = viewModel.selectedSubject {
-                    BranchScrollView(subject: selectedSubject)
+                    BranchScrollView(subject: selectedSubject, branchIDForDetailView: $branchIDForDetailView)
                 } else {
                     VStack {
                         Text("Select a subject to begin.")
@@ -29,9 +37,16 @@ struct KnowledgeTreeView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .sheet(item: $viewModel.branchToSetMastery) { branch in
-                // --- EDITED: Pass the view model into the sheet ---
                 MasteryGoalSheetView(branch: branch)
                     .environmentObject(viewModel)
+            }
+            .sheet(item: $branchIDForDetailView) { branchIdentifier in
+                if let branch = viewModel.findBranch(withID: branchIdentifier.id) {
+                    NavigationStack {
+                        BranchProgressDetailView(branch: branch)
+                            .environmentObject(viewModel)
+                    }
+                }
             }
         }
         .environmentObject(viewModel)
@@ -69,6 +84,9 @@ struct BranchScrollView: View {
     let subject: Subject
     @State private var showSubjectResetAlert = false
     
+    // --- EDITED: Use the new Identifiable wrapper ---
+    @Binding var branchIDForDetailView: BranchIdentifier?
+
     var body: some View {
         VStack {
             VStack(spacing: 5) {
@@ -103,7 +121,7 @@ struct BranchScrollView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     ForEach(viewModel.branchesToDisplay) { branch in
-                        BranchView(branch: branch)
+                        BranchView(branch: branch, branchIDForDetailView: $branchIDForDetailView)
                     }
                 }
                 .padding()
@@ -121,6 +139,9 @@ struct BranchView: View {
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     let branch: KnowledgeBranch
     
+    // --- EDITED: Use the new Identifiable wrapper ---
+    @Binding var branchIDForDetailView: BranchIdentifier?
+    
     @State private var isShowingTooltip = false
     
     private var currentMasteryGoal: MasteryLevel? {
@@ -134,16 +155,15 @@ struct BranchView: View {
     }
     
     private var statusColor: Color {
-        if branch.isMastered { return .yellow } // Gold for mastered
+        if branch.isMastered { return .yellow }
         if branch.isUnlocked { return .blue }
         return .secondary
     }
     
-    // --- NEW: Visual flair for remastered branches ---
     private var borderColor: Color {
         switch branch.remasterCount {
-        case 1: return .gray // Silver border
-        case 2: return .yellow // Gold border
+        case 1: return .gray
+        case 2: return .yellow
         default: return .clear
         }
     }
@@ -156,7 +176,6 @@ struct BranchView: View {
                 Text(branch.name)
                     .font(.title2.bold())
                 
-                // --- NEW: Remaster indicator ---
                 if branch.remasterCount > 0 {
                     HStack(spacing: 4) {
                         Image(systemName: "star.fill")
@@ -169,7 +188,6 @@ struct BranchView: View {
                 Spacer()
                 if branch.isMastered {
                     Button("Remaster") {
-                        // Trigger the sheet for remastering
                         viewModel.branchToSetMastery = branch
                     }
                     .buttonStyle(.bordered)
@@ -201,15 +219,23 @@ struct BranchView: View {
                 .padding(.top, 2)
             }
             
-            ProgressView(value: branch.progress, total: 1.0) {
-                HStack {
-                    Text("Mastery Progress")
-                    Spacer()
-                    Text("\(Int(branch.progress * 100))%")
+            // --- EDITED: Assign a BranchIdentifier on tap ---
+            Button(action: {
+                branchIDForDetailView = BranchIdentifier(id: branch.id)
+            }) {
+                ProgressView(value: branch.progress, total: 1.0) {
+                    HStack {
+                        Text("Mastery Progress")
+                            .underline()
+                        Spacer()
+                        Text("\(Int(branch.progress * 100))%")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
                 }
-                .font(.caption)
+                .tint(branch.isMastered ? .yellow : (branch.isUnlocked ? .blue : .gray))
             }
-            .tint(branch.isMastered ? .yellow : (branch.isUnlocked ? .blue : .gray))
+            .buttonStyle(.plain)
             .padding(.bottom, 5)
 
             Divider()
@@ -416,7 +442,6 @@ struct MasteryGoalSheetView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    // Disable goals that are not higher than the current one when remastering
                     .disabled(isRemastering && (viewModel.player?.branchMasteryLevels[branch.name]?.level ?? .standard) >= level)
                 }
                 Button("Custom (Coming Soon)") {}.buttonStyle(.bordered).disabled(true)

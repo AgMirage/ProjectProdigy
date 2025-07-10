@@ -46,7 +46,9 @@ struct MainView: View {
         .environmentObject(missionsViewModel)
         .environmentObject(knowledgeTreeViewModel)
         .onAppear {
+            // --- EDITED: Connect the ViewModels ---
             knowledgeTreeViewModel.reinitialize(with: viewModel)
+            viewModel.knowledgeTreeViewModel = knowledgeTreeViewModel
         }
     }
     
@@ -140,7 +142,6 @@ struct MainDashboardView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    // --- EDITED: Procrastination Monster View ---
                     ProcrastinationMonsterView()
                 }
                 
@@ -246,7 +247,6 @@ struct FocusFamiliarView: View {
     }
 }
 
-// --- NEW: Procrastination Monster View ---
 struct ProcrastinationMonsterView: View {
     @EnvironmentObject var viewModel: MainViewModel
     
