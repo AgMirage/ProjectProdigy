@@ -46,7 +46,7 @@ struct MainView: View {
         .environmentObject(missionsViewModel)
         .environmentObject(knowledgeTreeViewModel)
         .onAppear {
-            // --- EDITED: Connect the ViewModels ---
+            // --- EDITED: Corrected the initializer call ---
             knowledgeTreeViewModel.reinitialize(with: viewModel)
             viewModel.knowledgeTreeViewModel = knowledgeTreeViewModel
         }

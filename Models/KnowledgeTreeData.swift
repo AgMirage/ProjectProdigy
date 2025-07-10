@@ -73,18 +73,15 @@ struct KnowledgeBranch: Identifiable, Codable, Hashable {
         return !topics.isEmpty && topics.allSatisfy { $0.isUnlocked }
     }
     
-    var progress: Double {
-        guard !topics.isEmpty else { return 0.0 }
-        let unlockedTopics = topics.filter { $0.isUnlocked }.count
-        return Double(unlockedTopics) / Double(topics.count)
-    }
+    // --- REMOVED: This property was inaccurate and has been replaced by a new calculation in the ViewModel. ---
+    // var progress: Double { ... }
 
     init(id: UUID = UUID(), name: String, description: String, level: BranchLevel,
          prerequisiteBranchNames: [String] = [], prerequisiteCompletion: Double = 0.0,
          totalXpRequired: Double = 0.0, totalMissionsRequired: Int = 0, totalTimeRequired: TimeInterval = 0.0,
          requiredStats: [String : Int]? = nil, topics: [KnowledgeTopic],
          isUnlocked: Bool = false, isAutoUnlocked: Bool = false, currentXP: Double = 0.0, totalTimeSpent: TimeInterval = 0.0, missionsCompleted: Int = 0,
-         remasterCount: Int = 0) { // Added to initializer
+         remasterCount: Int = 0) {
         
         self.id = id
         self.name = name
@@ -102,7 +99,7 @@ struct KnowledgeBranch: Identifiable, Codable, Hashable {
         self.currentXP = currentXP
         self.totalTimeSpent = totalTimeSpent
         self.missionsCompleted = missionsCompleted
-        self.remasterCount = remasterCount // Set in initializer
+        self.remasterCount = remasterCount
     }
 }
 
@@ -224,7 +221,6 @@ struct KnowledgeTreeFactory {
                 KnowledgeTopic(name: "Laws of Thermodynamics", description: "...", xpRequired: 1500, missionsRequired: 20, timeRequired: 28800),
                 KnowledgeTopic(name: "Chemical Potential & Phase Equilibria", description: "...", xpRequired: 1800, missionsRequired: 25, timeRequired: 32400)
             ]),
-            // --- EDITED: Added "Calculus I" as a prerequisite ---
             KnowledgeBranch(name: "Analytical Chemistry", description: "The science of obtaining, processing, and communicating information about the composition and structure of matter.", level: .college, prerequisiteBranchNames: ["General Chemistry II", "Calculus I"], prerequisiteCompletion: 0.90, totalXpRequired: 6500, totalMissionsRequired: 50, totalTimeRequired: 115200, topics: [
                 KnowledgeTopic(name: "Spectroscopy Techniques (UV-Vis, IR, NMR Intro)", description: "...", xpRequired: 1400, missionsRequired: 18, timeRequired: 25200)
             ])

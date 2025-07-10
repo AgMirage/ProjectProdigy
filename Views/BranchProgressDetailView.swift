@@ -14,7 +14,8 @@ struct BranchProgressDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HeaderView(branch: branch, masteryGoal: currentMasteryGoal)
-                OverallProgressView(progress: branch.progress)
+                // --- EDITED: Uses the view model to get the correct progress value ---
+                OverallProgressView(progress: viewModel.getGranularProgress(for: branch))
                 
                 if branch.remasterCount > 0 {
                     RemasterBonusView(remasterCount: branch.remasterCount)
@@ -181,7 +182,7 @@ private struct TopicContributionsView: View {
                 .padding(.bottom, 5)
             
             ForEach(branch.topics) { topic in
-                TopicContributionView(topic: topic, isUnlocked: topic.isUnlocked)
+                TopicContributionView(topic: topic, parentBranch: branch)
             }
         }
     }
@@ -211,42 +212,57 @@ private struct MetricRow: View {
 }
 
 private struct TopicContributionView: View {
+    @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     let topic: KnowledgeTopic
-    let isUnlocked: Bool
-    
-    private func format(duration: TimeInterval) -> String {
-        let hours = duration / 3600
+    let parentBranch: KnowledgeBranch
+
+    private func formatHours(_ seconds: TimeInterval) -> String {
+        let hours = seconds / 3600
         return String(format: "%.1f", hours)
     }
     
     var body: some View {
-        HStack {
-            Image(systemName: isUnlocked ? "checkmark.circle.fill" : "circle")
-                .foregroundColor(isUnlocked ? .green : .secondary)
-            
-            Text(topic.name)
-                .strikethrough(isUnlocked)
-            
-            Spacer()
-            
-            if isUnlocked {
-                HStack(spacing: 10) {
-                    Text("\(Int(topic.xpRequired)) XP")
-                    Text("\(format(duration: topic.timeRequired))h")
-                    Text("\(topic.missionsRequired)m")
-                }
-                .font(.caption.bold())
-                .foregroundColor(.secondary)
+        Button(action: {
+            if topic.isUnlocked { return }
+            if viewModel.focusedTopicID == topic.id {
+                viewModel.setFocusedTopic(id: nil)
             } else {
-                Text("Locked")
-                    .font(.caption.italic())
-                    .foregroundColor(.secondary)
+                viewModel.setFocusedTopic(id: topic.id)
             }
+        }) {
+            HStack(spacing: 12) {
+                let isFocused = viewModel.focusedTopicID == topic.id
+                Image(systemName: topic.isUnlocked ? "checkmark.circle.fill" : (isFocused ? "record.circle" : "circle"))
+                    .font(.title3)
+                    .foregroundColor(topic.isUnlocked ? .green : (isFocused ? .accentColor : .secondary))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(topic.name)
+                        .strikethrough(topic.isUnlocked, color: .secondary)
+                        .foregroundColor(topic.isUnlocked ? .secondary : .primary)
+                    
+                    if !topic.isUnlocked {
+                        let remaining = viewModel.getRemainingRequirements(for: topic, in: parentBranch)
+                        
+                        if remaining.xp > 0 || remaining.missions > 0 || remaining.time > 0 {
+                             Text("Still requires: \(remaining.missions) missions, \(formatHours(remaining.time)) hrs, \(remaining.xp) XP in this branch.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Requirements met. Will unlock soon!")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+                Spacer()
+            }
+            .padding()
+            .background(Color.secondaryBackground)
+            .cornerRadius(8)
         }
-        .padding()
-        .background(Color.secondaryBackground)
-        .cornerRadius(8)
-        .opacity(isUnlocked ? 1.0 : 0.6)
+        .buttonStyle(.plain)
+        .disabled(topic.isUnlocked)
     }
 }
 
@@ -280,14 +296,15 @@ struct BranchProgressDetailView_Previews: PreviewProvider {
         let player = Player(username: "Preview")
         let mainVM = MainViewModel(player: player)
         let knowledgeVM = KnowledgeTreeViewModel()
+        
         knowledgeVM.reinitialize(with: mainVM)
         
-        // Find a branch that is unlocked to make the preview more useful
         let sampleBranch = knowledgeVM.subjects.first!.branches.first(where: { $0.isUnlocked }) ?? knowledgeVM.subjects.first!.branches.first!
         
         return NavigationStack {
             BranchProgressDetailView(branch: sampleBranch)
                 .environmentObject(knowledgeVM)
+                .environmentObject(mainVM)
         }
     }
 }

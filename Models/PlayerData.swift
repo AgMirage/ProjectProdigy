@@ -110,7 +110,9 @@ struct Player {
     var archivedMissions: [Mission]
     var permanentXpBoosts: [String: Double]
 
-    // --- NEW: Computed Property ---
+    // --- NEW: Stores the topic the player wants to focus on. ---
+    var focusedTopicID: UUID?
+
     /// Calculates the number of completed missions from the archive.
     var completedMissionsCount: Int {
         archivedMissions.filter { $0.status == .completed }.count
@@ -146,6 +148,7 @@ struct Player {
         self.dungeonProgress = [:]
         self.archivedMissions = []
         self.permanentXpBoosts = [:]
+        self.focusedTopicID = nil // Initialize the new property
         
         self.academicTier = .foundationalApprentice
         self.stats = .default

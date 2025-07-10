@@ -32,9 +32,11 @@ class MissionsViewModel: ObservableObject {
     
     @Published var missionToEdit: Mission?
     
-    @Published var selectedSubject: Subject?
-    @Published var selectedBranch: KnowledgeBranch?
-    @Published var selectedTopic: KnowledgeTopic?
+    // --- EDITED: These now store IDs instead of the full objects to prevent staleness ---
+    @Published var selectedSubjectID: UUID?
+    @Published var selectedBranchID: UUID?
+    @Published var selectedTopicID: UUID?
+    
     @Published var selectedStudyType: StudyType?
     @Published var missionHours: Int = 0
     @Published var missionMinutes: Int = 30
@@ -93,12 +95,16 @@ class MissionsViewModel: ObservableObject {
         return missions
     }
     
-    var availableStudyTypes: [StudyType] {
-        guard let category = selectedSubject?.category else { return [] }
-        return StudyType.allCases.filter { $0.categories.contains(category) }
+    // --- EDITED: Helper computed property ---
+    private func getSelectedSubject(from knowledgeTree: [Subject]) -> Subject? {
+        guard let id = selectedSubjectID else { return nil }
+        return knowledgeTree.first { $0.id == id }
     }
     
-    var knowledgeTree: [Subject] = []
+    func availableStudyTypes(from knowledgeTree: [Subject]) -> [StudyType] {
+        guard let subject = getSelectedSubject(from: knowledgeTree) else { return [] }
+        return StudyType.allCases.filter { $0.categories.contains(subject.category) }
+    }
     
     private var timer: AnyCancellable?
     private var scheduleCheckTimer: AnyCancellable?
@@ -108,13 +114,14 @@ class MissionsViewModel: ObservableObject {
     
     init(mainViewModel: MainViewModel) {
         self.mainViewModel = mainViewModel
-        self.knowledgeTree = KnowledgeTreeFactory.createFullTree()
         resetForm()
         
-        let dailyManager = DailyMissionManager(settings: dailyMissionSettings)
-        let newDailyMissions = dailyManager.generateMissionsForToday(knowledgeTree: self.knowledgeTree)
-        self.dailyMissionSettings = dailyManager.settings
-        self.activeMissions.append(contentsOf: newDailyMissions)
+        if let tree = mainViewModel.knowledgeTreeViewModel?.subjects {
+             let dailyManager = DailyMissionManager(settings: dailyMissionSettings)
+             let newDailyMissions = dailyManager.generateMissionsForToday(knowledgeTree: tree)
+             self.dailyMissionSettings = dailyManager.settings
+             self.activeMissions.append(contentsOf: newDailyMissions)
+        }
         
         self.events = eventManager.activeEvents + eventManager.upcomingEvents
         
@@ -211,7 +218,7 @@ class MissionsViewModel: ObservableObject {
     
     // MARK: - Mission Creation & Lifecycle
     
-    func createMission() {
+    func createMission(knowledgeTree: [Subject]) {
         if let scheduledDate = self.scheduledDate {
             let newMissionDuration = TimeInterval((missionHours * 3600) + (missionMinutes * 60))
             let newMissionEnd = scheduledDate.addingTimeInterval(newMissionDuration)
@@ -228,13 +235,16 @@ class MissionsViewModel: ObservableObject {
             }
         }
         
-        proceedWithMissionCreation()
+        proceedWithMissionCreation(knowledgeTree: knowledgeTree)
     }
     
-    func proceedWithMissionCreation() {
-        guard let subject = selectedSubject,
-              let branch = selectedBranch,
-              let topic = selectedTopic,
+    func proceedWithMissionCreation(knowledgeTree: [Subject]) {
+        guard let subjectID = selectedSubjectID,
+              let subject = knowledgeTree.first(where: { $0.id == subjectID }),
+              let branchID = selectedBranchID,
+              let branch = subject.branches.first(where: { $0.id == branchID }),
+              let topicID = selectedTopicID,
+              let topic = branch.topics.first(where: { $0.id == topicID }),
               let studyType = selectedStudyType,
               let player = mainViewModel?.player else { return }
         
@@ -274,11 +284,26 @@ class MissionsViewModel: ObservableObject {
         resetForm()
     }
 
-    
     func generateQuickMission() {
         guard let player = mainViewModel?.player,
-              let (topic, branchName, subjectName) = findRandomUnlockedTopic(in: knowledgeTree) else {
-            mainViewModel?.addLogEntry("Could not generate Quick Mission. Unlock more topics first!", color: .orange)
+              let knowledgeTreeVM = mainViewModel?.knowledgeTreeViewModel,
+              let knowledgeTree = mainViewModel?.knowledgeTreeViewModel?.subjects else {
+            mainViewModel?.addLogEntry("Could not generate Quick Mission. Knowledge system unavailable.", color: .orange)
+            return
+        }
+        
+        var topicInfo: (topic: KnowledgeTopic, branchName: String, subjectName: String)?
+
+        if let focusedID = knowledgeTreeVM.focusedTopicID,
+           let info = findTopicByID(in: knowledgeTree, id: focusedID) {
+            topicInfo = info
+            knowledgeTreeVM.setFocusedTopic(id: nil)
+        } else {
+            topicInfo = findRandomUnlockedTopic(in: knowledgeTree)
+        }
+        
+        guard let (topic, branchName, subjectName) = topicInfo else {
+            mainViewModel?.addLogEntry("Could not generate Quick Mission. Select a focus topic or unlock more topics first!", color: .orange)
             return
         }
         
@@ -304,7 +329,7 @@ class MissionsViewModel: ObservableObject {
         )
         
         activeMissions.insert(quickMission, at: 0)
-        mainViewModel?.addLogEntry("Quick Mission generated: \(topic.name)!", color: .purple)
+        mainViewModel?.addLogEntry("Quick Mission generated for '\(topic.name)'!", color: .purple)
     }
 
     
@@ -347,11 +372,9 @@ class MissionsViewModel: ObservableObject {
         timer?.cancel()
     }
     
-    // --- EDITED: More accurate time calculation ---
     func completeMission(mission: Mission) {
         timer?.cancel()
         
-        // Calculate the actual time spent
         if mission.isPomodoro {
             let studyDuration = mission.pomodoroStudyDuration ?? dailyMissionSettings.pomodoroStudyDuration
             let timeInCompletedCycles = Double(mission.pomodoroCycle - 1) * studyDuration
@@ -373,7 +396,6 @@ class MissionsViewModel: ObservableObject {
         timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.updateTimer() }
     }
     
-    // --- EDITED: More accurate time calculation for bonus completion ---
     func completeMissionForBonus(mission: Mission) {
         timer?.cancel()
         
@@ -431,7 +453,7 @@ class MissionsViewModel: ObservableObject {
     }
 
     func resetForm() {
-        selectedSubject = nil; selectedBranch = nil; selectedTopic = nil; selectedStudyType = nil; missionHours = 0; missionMinutes = 30; isPomodoroEnabled = false; scheduledDate = nil
+        selectedSubjectID = nil; selectedBranchID = nil; selectedTopicID = nil; selectedStudyType = nil; missionHours = 0; missionMinutes = 30; isPomodoroEnabled = false; scheduledDate = nil
     }
     
     private func stopAllMissions() {
@@ -505,6 +527,17 @@ class MissionsViewModel: ObservableObject {
         }
     }
     
+    private func findTopicByID(in tree: [Subject], id: UUID) -> (topic: KnowledgeTopic, branchName: String, subjectName: String)? {
+        for subject in tree {
+            for branch in subject.branches {
+                if let topic = branch.topics.first(where: { $0.id == id }) {
+                    return (topic, branch.name, subject.name)
+                }
+            }
+        }
+        return nil
+    }
+
     private func findRandomUnlockedTopic(in tree: [Subject]) -> (topic: KnowledgeTopic, branchName: String, subjectName: String)? {
         let allUnlockedBranches = tree.flatMap { subject in
             subject.branches
@@ -514,11 +547,15 @@ class MissionsViewModel: ObservableObject {
         
         guard !allUnlockedBranches.isEmpty else { return nil }
         
-        let randomBranchInfo = allUnlockedBranches.randomElement()!
+        let nonMasteredBranches = allUnlockedBranches.filter { !$0.branch.isMastered }
+        let targetBranches = nonMasteredBranches.isEmpty ? allUnlockedBranches : nonMasteredBranches
         
-        let unlockedTopics = randomBranchInfo.branch.topics.filter { $0.isUnlocked }
+        guard let randomBranchInfo = targetBranches.randomElement() else { return nil }
         
-        guard let randomTopic = unlockedTopics.randomElement() else { return nil }
+        let nonUnlockedTopics = randomBranchInfo.branch.topics.filter { !$0.isUnlocked }
+        let targetTopics = nonUnlockedTopics.isEmpty ? randomBranchInfo.branch.topics : nonUnlockedTopics
+
+        guard let randomTopic = targetTopics.randomElement() else { return nil }
         
         return (topic: randomTopic, branchName: randomBranchInfo.branch.name, subjectName: randomBranchInfo.subjectName)
     }

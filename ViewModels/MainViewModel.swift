@@ -69,7 +69,6 @@ class MainViewModel: ObservableObject {
     @Published var isShowingAvatarSelection = false
     @Published var isShowingFamiliarSelection = false
     
-    // --- NEW: Reference to the KnowledgeTreeViewModel ---
     var knowledgeTreeViewModel: KnowledgeTreeViewModel?
     
     var monsterMood: MonsterMood {
@@ -176,7 +175,6 @@ class MainViewModel: ObservableObject {
         }
         player.lastMissionCompletionDate = Date()
         
-        // --- NEW: Add progress to the Knowledge Tree ---
         if let timeSpent = mission.actualTimeSpent, timeSpent > 0 {
             knowledgeTreeViewModel?.addProgress(
                 to: mission.branchName,
@@ -198,6 +196,9 @@ class MainViewModel: ObservableObject {
         }
         
         self.missionToReview = completedMission
+        
+        // --- FIX: Manually notify the KnowledgeTreeView that its data has changed ---
+        knowledgeTreeViewModel?.objectWillChange.send()
     }
     
     func submitMissionReview(for mission: Mission, focus: Int, understanding: Int, challenge: String) {

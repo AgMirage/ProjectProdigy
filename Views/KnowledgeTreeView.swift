@@ -1,6 +1,5 @@
 import SwiftUI
 
-// --- NEW: Wrapper struct to make UUID Identifiable ---
 struct BranchIdentifier: Identifiable {
     let id: UUID
 }
@@ -10,7 +9,6 @@ struct KnowledgeTreeView: View {
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     @EnvironmentObject var mainViewModel: MainViewModel
     
-    // --- EDITED: Use the new Identifiable wrapper ---
     @State private var branchIDForDetailView: BranchIdentifier?
 
     var body: some View {
@@ -84,7 +82,6 @@ struct BranchScrollView: View {
     let subject: Subject
     @State private var showSubjectResetAlert = false
     
-    // --- EDITED: Use the new Identifiable wrapper ---
     @Binding var branchIDForDetailView: BranchIdentifier?
 
     var body: some View {
@@ -139,7 +136,6 @@ struct BranchView: View {
     @EnvironmentObject var viewModel: KnowledgeTreeViewModel
     let branch: KnowledgeBranch
     
-    // --- EDITED: Use the new Identifiable wrapper ---
     @Binding var branchIDForDetailView: BranchIdentifier?
     
     @State private var isShowingTooltip = false
@@ -219,16 +215,18 @@ struct BranchView: View {
                 .padding(.top, 2)
             }
             
-            // --- EDITED: Assign a BranchIdentifier on tap ---
+            // --- EDITED: Use the new granular progress calculation ---
+            let progress = viewModel.getGranularProgress(for: branch)
+            
             Button(action: {
                 branchIDForDetailView = BranchIdentifier(id: branch.id)
             }) {
-                ProgressView(value: branch.progress, total: 1.0) {
+                ProgressView(value: progress, total: 1.0) {
                     HStack {
                         Text("Mastery Progress")
                             .underline()
                         Spacer()
-                        Text("\(Int(branch.progress * 100))%")
+                        Text("\(Int(progress * 100))%")
                     }
                     .font(.caption)
                     .foregroundColor(.accentColor)
@@ -287,22 +285,7 @@ struct TopicView: View {
     let topic: KnowledgeTopic
     let parentBranch: KnowledgeBranch
     @State private var showTopicResetAlert = false
-    
-    private var multiplier: Double {
-        let masteryMultiplier = viewModel.player?.branchMasteryLevels[parentBranch.name]?.level.multiplier ?? 1.0
-        let remasterMultiplier = 1.0 + (Double(parentBranch.remasterCount) * 0.25)
-        return masteryMultiplier * remasterMultiplier
-    }
-    private var displayXpRequired: Int {
-        Int(topic.xpRequired * multiplier)
-    }
-    private var displayMissionsRequired: Int {
-        Int(ceil(Double(topic.missionsRequired) * multiplier))
-    }
-    private var displayTimeRequired: TimeInterval {
-        topic.timeRequired * multiplier
-    }
-    
+
     private func formatHours(_ seconds: TimeInterval) -> String {
         let hours = seconds / 3600
         return String(format: "%.1f", hours)
@@ -319,7 +302,8 @@ struct TopicView: View {
                     .foregroundColor(topic.isUnlocked ? .secondary : .primary)
                 
                 if !topic.isUnlocked {
-                    Text("Requires: \(displayMissionsRequired) missions, \(formatHours(displayTimeRequired)) hrs, \(displayXpRequired) XP in this branch.")
+                    let remaining = viewModel.getRemainingRequirements(for: topic, in: parentBranch)
+                    Text("Requires: \(remaining.missions) missions, \(formatHours(remaining.time)) hrs, \(remaining.xp) XP")
                         .font(.caption2).foregroundColor(.secondary)
                 }
             }

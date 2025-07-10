@@ -69,16 +69,12 @@ struct MissionsView: View {
         }
         .sheet(isPresented: $viewModel.isShowingCreateSheet) {
             CreateMissionView()
-                .onAppear {
-                    viewModel.knowledgeTree = knowledgeTreeViewModel.subjects
-                }
         }
         .sheet(item: $viewModel.missionToEdit) { mission in
             if let index = viewModel.activeMissions.firstIndex(where: { $0.id == mission.id }) {
                 EditMissionView(mission: $viewModel.activeMissions[index])
             }
         }
-        // --- EDITED: The call to submit and archive the review is simplified. ---
         .sheet(item: $mainViewModel.missionToReview) { mission in
              MissionReviewView(
                  mission: mission,
@@ -435,6 +431,7 @@ struct MonthlyCalendarView: View {
 struct EditMissionView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var viewModel: MissionsViewModel
+    @EnvironmentObject var knowledgeTreeViewModel: KnowledgeTreeViewModel
     
     @Binding var mission: Mission
     
@@ -460,7 +457,7 @@ struct EditMissionView: View {
                     Text("Topic: \(mission.topicName)")
                         .foregroundColor(.secondary)
                     
-                    let subjectCategory = viewModel.knowledgeTree.first { $0.name == mission.subjectName }?.category
+                    let subjectCategory = knowledgeTreeViewModel.subjects.first { $0.name == mission.subjectName }?.category
                     let availableTypes = StudyType.allCases.filter { $0.categories.contains(subjectCategory ?? .stem) }
                     
                     Picker("Study Type", selection: $studyType) {
@@ -998,6 +995,7 @@ struct MissionRowView: View {
 // MARK: - Create Mission Sheet View
 struct CreateMissionView: View {
     @EnvironmentObject var viewModel: MissionsViewModel
+    @EnvironmentObject var knowledgeTreeViewModel: KnowledgeTreeViewModel
     @Environment(\.dismiss) var dismiss
     @State private var isScheduling: Bool = false
 
@@ -1032,7 +1030,7 @@ struct CreateMissionView: View {
             .onChange(of: viewModel.missionMinutes) { _, _ in checkPomodoroEligibility() }
             .alert("Scheduling Conflict", isPresented: $viewModel.showConflictAlert, presenting: viewModel.conflictingMission) { conflictingMission in
                 Button("Create Anyway", role: .destructive) {
-                    viewModel.proceedWithMissionCreation()
+                    viewModel.proceedWithMissionCreation(knowledgeTree: knowledgeTreeViewModel.subjects)
                 }
                 Button("Cancel", role: .cancel) { }
             } message: { conflictingMission in
@@ -1043,28 +1041,33 @@ struct CreateMissionView: View {
     
     private var topicSection: some View {
         Section("Select Topic") {
-            Picker("Subject", selection: $viewModel.selectedSubject) {
-                Text("Select Subject...").tag(nil as Subject?)
-                ForEach(viewModel.knowledgeTree) { Text($0.name).tag($0 as Subject?) }
-            }.onChange(of: viewModel.selectedSubject) {
-                viewModel.selectedBranch = nil
+            Picker("Subject", selection: $viewModel.selectedSubjectID) {
+                Text("Select Subject...").tag(nil as UUID?)
+                ForEach(knowledgeTreeViewModel.subjects) { Text($0.name).tag($0.id as UUID?) }
+            }.onChange(of: viewModel.selectedSubjectID) {
+                viewModel.selectedBranchID = nil
                 viewModel.selectedStudyType = nil
             }
             
-            Picker("Branch", selection: $viewModel.selectedBranch) {
-                Text("Select Branch...").tag(nil as KnowledgeBranch?)
-                if let branches = viewModel.selectedSubject?.branches.filter({ $0.isUnlocked }) {
-                    ForEach(branches) { Text($0.name).tag($0 as KnowledgeBranch?) }
+            Picker("Branch", selection: $viewModel.selectedBranchID) {
+                Text("Select Branch...").tag(nil as UUID?)
+                if let subjectID = viewModel.selectedSubjectID,
+                   let subject = knowledgeTreeViewModel.subjects.first(where: { $0.id == subjectID }) {
+                    ForEach(subject.branches.filter({ $0.isUnlocked })) { Text($0.name).tag($0.id as UUID?) }
                 }
-            }.disabled(viewModel.selectedSubject == nil)
-             .onChange(of: viewModel.selectedBranch) { viewModel.selectedTopic = nil }
+            }.disabled(viewModel.selectedSubjectID == nil)
+             .onChange(of: viewModel.selectedBranchID) { viewModel.selectedTopicID = nil }
             
-            Picker("Topic", selection: $viewModel.selectedTopic) {
-                Text("Select Topic...").tag(nil as KnowledgeTopic?)
-                if let topics = viewModel.selectedBranch?.topics.filter({ $0.isUnlocked }) {
-                    ForEach(topics) { Text($0.name).tag($0 as KnowledgeTopic?) }
+            Picker("Topic", selection: $viewModel.selectedTopicID) {
+                Text("Select Topic...").tag(nil as UUID?)
+                if let subjectID = viewModel.selectedSubjectID,
+                   let subject = knowledgeTreeViewModel.subjects.first(where: { $0.id == subjectID }),
+                   let branchID = viewModel.selectedBranchID,
+                   let branch = subject.branches.first(where: { $0.id == branchID }) {
+                    // --- THE FIX: Removed the incorrect filter ---
+                    ForEach(branch.topics) { Text($0.name).tag($0.id as UUID?) }
                 }
-            }.disabled(viewModel.selectedBranch == nil)
+            }.disabled(viewModel.selectedBranchID == nil)
         }
     }
     
@@ -1074,8 +1077,8 @@ struct CreateMissionView: View {
         return Section {
             Picker("Study Type", selection: $viewModel.selectedStudyType) {
                 Text("Select Study Type...").tag(nil as StudyType?)
-                ForEach(viewModel.availableStudyTypes, id: \.self) { Text($0.displayString).tag($0 as StudyType?) }
-            }.disabled(viewModel.selectedSubject == nil)
+                ForEach(viewModel.availableStudyTypes(from: knowledgeTreeViewModel.subjects), id: \.self) { Text($0.displayString).tag($0 as StudyType?) }
+            }.disabled(viewModel.selectedSubjectID == nil)
             
             HStack {
                 Text("Duration")
@@ -1125,7 +1128,7 @@ struct CreateMissionView: View {
     }
     
     private var createButtonSection: some View {
-        let isTopicInvalid = viewModel.selectedSubject == nil || viewModel.selectedBranch == nil || viewModel.selectedTopic == nil || viewModel.selectedStudyType == nil
+        let isTopicInvalid = viewModel.selectedSubjectID == nil || viewModel.selectedBranchID == nil || viewModel.selectedTopicID == nil || viewModel.selectedStudyType == nil
         
         let totalMinutes = (viewModel.missionHours * 60) + viewModel.missionMinutes
         let isDurationInvalid = totalMinutes < 5
@@ -1134,7 +1137,7 @@ struct CreateMissionView: View {
         
         return Section {
             Button("Create Mission") {
-                viewModel.createMission()
+                viewModel.createMission(knowledgeTree: knowledgeTreeViewModel.subjects)
             }
             .disabled(isInvalid)
         }

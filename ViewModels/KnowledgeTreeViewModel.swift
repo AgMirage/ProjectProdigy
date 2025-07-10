@@ -20,6 +20,8 @@ class KnowledgeTreeViewModel: ObservableObject {
     }
     @Published var branchToSetMastery: KnowledgeBranch?
     
+    @Published var focusedTopicID: UUID?
+    
     @Published var refreshID = UUID()
     
     private var fullTree: [Subject] = []
@@ -32,6 +34,7 @@ class KnowledgeTreeViewModel: ObservableObject {
     func reinitialize(with mainViewModel: MainViewModel) {
         self.mainViewModel = mainViewModel
         self.player = mainViewModel.player
+        self.focusedTopicID = self.player?.focusedTopicID
         self.fullTree = KnowledgeTreeFactory.createFullTree()
         self.unlockInitialNodes()
         self.subjects = self.fullTree
@@ -80,6 +83,7 @@ class KnowledgeTreeViewModel: ObservableObject {
         self.player = player
         
         checkForTopicUnlocks(inBranchIndex: bIndex, inSubjectIndex: sIndex)
+        self.subjects = self.fullTree
         updateDisplayedBranches()
         refreshID = UUID()
     }
@@ -111,10 +115,60 @@ class KnowledgeTreeViewModel: ObservableObject {
         mainVM.player = player
         self.player = player
         
+        self.subjects = self.fullTree
         updateDisplayedBranches()
         refreshID = UUID()
     }
+
+    func setFocusedTopic(id: UUID?) {
+        focusedTopicID = id
+        mainViewModel?.player.focusedTopicID = id
+    }
     
+    func getRequirements(for topic: KnowledgeTopic, in branch: KnowledgeBranch) -> (xp: Int, missions: Int, time: TimeInterval) {
+        let masteryMultiplier = player?.branchMasteryLevels[branch.name]?.level.multiplier ?? 1.0
+        let remasterMultiplier = 1.0 + (Double(branch.remasterCount) * 0.25)
+        let totalMultiplier = masteryMultiplier * remasterMultiplier
+        
+        let requiredXP = Int(topic.xpRequired * totalMultiplier)
+        let requiredMissions = Int(ceil(Double(topic.missionsRequired) * totalMultiplier))
+        let requiredTime = topic.timeRequired * totalMultiplier
+        
+        return (xp: requiredXP, missions: requiredMissions, time: requiredTime)
+    }
+
+    func getRemainingRequirements(for topic: KnowledgeTopic, in branch: KnowledgeBranch) -> (xp: Int, missions: Int, time: TimeInterval) {
+        let totalRequirements = getRequirements(for: topic, in: branch)
+
+        let remainingXP = max(0, Double(totalRequirements.xp) - branch.currentXP)
+        let remainingMissions = max(0, totalRequirements.missions - branch.missionsCompleted)
+        let remainingTime = max(0, totalRequirements.time - branch.totalTimeSpent)
+
+        return (xp: Int(remainingXP), missions: remainingMissions, time: remainingTime)
+    }
+
+    func getGranularProgress(for branch: KnowledgeBranch) -> Double {
+        let masteryLevel = player?.branchMasteryLevels[branch.name]?.level ?? .standard
+        let remasterMultiplier = 1.0 + (Double(branch.remasterCount) * 0.25)
+        let totalMultiplier = masteryLevel.multiplier * remasterMultiplier
+        
+        let totalRequiredXP = branch.topics.reduce(0) { $0 + $1.xpRequired } * totalMultiplier
+        let totalRequiredTime = branch.topics.reduce(0) { $0 + $1.timeRequired } * totalMultiplier
+        let totalRequiredMissions = branch.topics.reduce(0) { $0 + Double($1.missionsRequired) } * totalMultiplier
+
+        guard totalRequiredXP > 0, totalRequiredTime > 0, totalRequiredMissions > 0 else {
+            guard !branch.topics.isEmpty else { return 0.0 }
+            let unlockedTopics = branch.topics.filter { $0.isUnlocked }.count
+            return Double(unlockedTopics) / Double(branch.topics.count)
+        }
+
+        let xpProgress = min(1.0, branch.currentXP / totalRequiredXP)
+        let timeProgress = min(1.0, branch.totalTimeSpent / totalRequiredTime)
+        let missionProgress = min(1.0, Double(branch.missionsCompleted) / totalRequiredMissions)
+
+        return (xpProgress + timeProgress + missionProgress) / 3.0
+    }
+
     func canAttemptUnlock(for branch: KnowledgeBranch) -> Bool {
         guard self.player != nil else { return false }
 
@@ -130,7 +184,7 @@ class KnowledgeTreeViewModel: ObservableObject {
             guard let prereqBranch = findBranch(withName: prereqName), prereqBranch.isUnlocked else {
                 return false
             }
-            if prereqBranch.progress < branch.prerequisiteCompletion {
+            if getGranularProgress(for: prereqBranch) < branch.prerequisiteCompletion {
                 return false
             }
         }
@@ -144,6 +198,7 @@ class KnowledgeTreeViewModel: ObservableObject {
                 resetBranchProgress(branchID: branch.id, shouldUpdateView: false)
             }
         }
+        self.subjects = self.fullTree
         updateDisplayedBranches()
         refreshID = UUID()
     }
@@ -160,6 +215,7 @@ class KnowledgeTreeViewModel: ObservableObject {
         }
         
         if shouldUpdateView {
+            self.subjects = self.fullTree
             updateDisplayedBranches()
             refreshID = UUID()
         }
@@ -176,6 +232,7 @@ class KnowledgeTreeViewModel: ObservableObject {
         fullTree[sIndex].branches[bIndex].missionsCompleted -= topicToReset.missionsRequired
         fullTree[sIndex].branches[bIndex].totalTimeSpent -= topicToReset.timeRequired
         
+        self.subjects = self.fullTree
         updateDisplayedBranches()
         refreshID = UUID()
     }
@@ -218,7 +275,6 @@ class KnowledgeTreeViewModel: ObservableObject {
 
     // MARK: - Private Helper Functions
     
-    // --- NEW: Public helper to find a branch by ID ---
     func findBranch(withID id: UUID) -> KnowledgeBranch? {
         for subject in fullTree {
             if let branch = subject.branches.first(where: { $0.id == id }) {
@@ -232,19 +288,14 @@ class KnowledgeTreeViewModel: ObservableObject {
         let branch = fullTree[subjectIndex].branches[branchIndex]
         guard branch.isUnlocked else { return }
 
-        let remasterMultiplier = 1.0 + (Double(branch.remasterCount) * 0.25)
-
         for i in 0..<branch.topics.count {
             guard !branch.topics[i].isUnlocked else { continue }
             let topic = branch.topics[i]
+            let requirements = getRequirements(for: topic, in: branch)
             
-            let requiredXP = topic.xpRequired * remasterMultiplier
-            let requiredMissions = Int(ceil(Double(topic.missionsRequired) * remasterMultiplier))
-            let requiredTime = topic.timeRequired * remasterMultiplier
-            
-            if branch.currentXP >= requiredXP &&
-               branch.missionsCompleted >= requiredMissions &&
-               branch.totalTimeSpent >= requiredTime {
+            if branch.currentXP >= Double(requirements.xp) &&
+               branch.missionsCompleted >= requirements.missions &&
+               branch.totalTimeSpent >= requirements.time {
                 
                 fullTree[subjectIndex].branches[branchIndex].topics[i].isUnlocked = true
             }
@@ -264,22 +315,33 @@ class KnowledgeTreeViewModel: ObservableObject {
         }
     }
     
+    // --- EDITED: This function now correctly sets progress for auto-unlocked branches ---
     private func unlockBranchAndPrerequisites(branchName: String, inSubjectName subjectName: String, isAuto: Bool) {
         guard let (sIndex, bIndex) = findBranchIndices(forBranchName: branchName, inSubjectName: subjectName) else { return }
         guard !fullTree[sIndex].branches[bIndex].isUnlocked else { return }
-        
+
         var branch = fullTree[sIndex].branches[bIndex]
         branch.isUnlocked = true
         branch.isAutoUnlocked = isAuto
-        
+
         if isAuto {
             for i in 0..<branch.topics.count {
                 branch.topics[i].isUnlocked = true
             }
+
+            // --- FIX: Grant full progress for auto-unlocked branches ---
+            let totalXp = branch.topics.reduce(0) { $0 + $1.xpRequired }
+            let totalTime = branch.topics.reduce(0) { $0 + $1.timeRequired }
+            let totalMissions = branch.topics.reduce(0) { $0 + $1.missionsRequired }
+            
+            branch.currentXP = totalXp
+            branch.totalTimeSpent = totalTime
+            branch.missionsCompleted = totalMissions
         }
+        
         fullTree[sIndex].branches[bIndex] = branch
         
-        for prereqName in fullTree[sIndex].branches[bIndex].prerequisiteBranchNames {
+        for prereqName in branch.prerequisiteBranchNames {
             if let prereqParentSubjectName = findSubjectName(forBranch: prereqName) {
                 unlockBranchAndPrerequisites(branchName: prereqName, inSubjectName: prereqParentSubjectName, isAuto: isAuto)
             }
