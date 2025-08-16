@@ -1,11 +1,3 @@
-//
-//  EventsView.swift
-//  ProjectProdigy
-//
-//  Created by Kaia Quinn on 6/11/25.
-//
-
-
 import SwiftUI
 
 struct EventsView: View {
@@ -16,61 +8,64 @@ struct EventsView: View {
         NavigationStack {
             ScrollView {
                 if viewModel.activeEvents.isEmpty && viewModel.upcomingEvents.isEmpty {
-                    // Show an empty state message if there are no events
-                    VStack {
-                        Spacer(minLength: 100)
-                        Image(systemName: "calendar.badge.exclamationmark")
-                            .font(.system(size: 60))
-                            .foregroundColor(.secondary)
-                        Text("No Events Scheduled")
-                            .font(.title2)
-                            .bold()
-                        Text("Check back later for special events and challenges.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
+                    emptyStateView
                 } else {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        // --- Active Events Section ---
-                        if !viewModel.activeEvents.isEmpty {
-                            Text("Active Events")
-                                .font(.title2).bold()
-                                .padding(.horizontal)
-                            
-                            ForEach(viewModel.activeEvents) { event in
-                                EventCardView(event: event)
-                            }
-                        }
-                        
-                        // --- Upcoming Events Section ---
-                        if !viewModel.upcomingEvents.isEmpty {
-                            Text("Upcoming Events")
-                                .font(.title2).bold()
-                                .padding(.horizontal)
-                                .padding(.top)
-                            
-                            ForEach(viewModel.upcomingEvents) { event in
-                                EventCardView(event: event)
-                            }
-                        }
-                    }
-                    .padding(.vertical)
+                    eventListView
                 }
             }
             .navigationTitle("Events")
-            // --- FIXED: Replaced iOS-specific color with a cross-platform one. ---
             .background(Color.groupedBackground)
             .onAppear {
-                // Refresh events each time the view appears
                 viewModel.loadEvents()
             }
         }
     }
+    
+    private var emptyStateView: some View {
+        VStack {
+            Spacer(minLength: 100)
+            Image(systemName: "calendar.badge.exclamationmark")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            Text("No Events Scheduled")
+                .font(.title2)
+                .bold()
+            Text("Check back later for special events and challenges.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+    }
+    
+    private var eventListView: some View {
+        LazyVStack(alignment: .leading, spacing: 20) {
+            if !viewModel.activeEvents.isEmpty {
+                Text("Active Events")
+                    .font(.title2).bold()
+                    .padding(.horizontal)
+                
+                ForEach(viewModel.activeEvents) { event in
+                    EventCardView(event: event)
+                }
+            }
+            
+            if !viewModel.upcomingEvents.isEmpty {
+                Text("Upcoming Events")
+                    .font(.title2).bold()
+                    .padding(.horizontal)
+                    .padding(.top)
+                
+                ForEach(viewModel.upcomingEvents) { event in
+                    EventCardView(event: event)
+                }
+            }
+        }
+        .padding(.vertical)
+    }
 }
 
-// MARK: - Helper View: EventCardView
+// MARK: - Event Card View
 struct EventCardView: View {
     let event: Event
     
@@ -79,63 +74,74 @@ struct EventCardView: View {
             Image(event.bannerImageName)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(height: 120)
+                // --- FIX: Increased the height of the banner frame ---
+                .frame(height: 180)
                 .clipped()
             
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(event.name)
-                            .font(.headline)
-                            .bold()
-                        Text(formattedDateRange)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Text(timeStatus)
-                        .font(.caption.bold())
-                        .padding(8)
-                        .background(statusColor.opacity(0.2))
-                        .foregroundColor(statusColor)
-                        .cornerRadius(8)
-                }
-                
-                Text(event.description)
-                    .font(.subheadline)
-                
-                Divider()
-                
-                Text("Rewards:")
-                    .font(.caption.bold())
-                
-                HStack {
-                    ForEach(event.rewards) { reward in
-                        VStack {
-                            Image(reward.iconName)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 30, height: 30)
-                                .padding(10)
-                                .background(Color.gray.opacity(0.15))
-                                .cornerRadius(8)
-                            Text(reward.name)
-                                .font(.caption2)
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                }
-                
-            }
-            .padding()
+            content
+                .padding()
         }
-        // --- FIXED: Replaced iOS-specific color with a cross-platform one. ---
         .background(Color.secondaryBackground)
         .cornerRadius(12)
         .padding(.horizontal)
     }
     
-    // MARK: - Computed Properties for Date Formatting
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            
+            Text(event.description)
+                .font(.subheadline)
+            
+            Divider()
+            
+            Text("Rewards:")
+                .font(.caption.bold())
+            
+            rewardsGrid
+        }
+    }
+    
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(event.name)
+                    .font(.headline)
+                    .bold()
+                Text(formattedDateRange)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Text(timeStatus)
+                .font(.caption.bold())
+                .padding(8)
+                .background(statusColor.opacity(0.2))
+                .foregroundColor(statusColor)
+                .cornerRadius(8)
+        }
+    }
+    
+    private var rewardsGrid: some View {
+        HStack {
+            ForEach(event.rewards) { reward in
+                VStack {
+                    Image(reward.iconName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 30, height: 30)
+                        .padding(10)
+                        .background(Color.gray.opacity(0.15))
+                        .cornerRadius(8)
+                    Text(reward.name)
+                        .font(.caption2)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Computed Properties
     
     private var formattedDateRange: String {
         let formatter = DateFormatter()
@@ -174,13 +180,13 @@ struct EventsView_Previews: PreviewProvider {
 }
 
 
-// MARK: - Cross-Platform Color Helpers (NEW)
+// MARK: - Cross-Platform Color Helpers
 fileprivate extension Color {
     #if os(macOS)
     static var groupedBackground = Color(NSColor.windowBackgroundColor)
     static var secondaryBackground = Color(NSColor.controlBackgroundColor)
     #else
-    static var groupedBackground = Color(.systemGroupedBackground)
-    static var secondaryBackground = Color(.secondarySystemGroupedBackground)
+    static var groupedBackground = Color(UIColor.systemGroupedBackground)
+    static var secondaryBackground = Color(UIColor.secondarySystemGroupedBackground)
     #endif
 }

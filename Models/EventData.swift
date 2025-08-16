@@ -31,18 +31,21 @@ struct Event: Identifiable, Codable, Hashable {
 struct EventCalendar {
 
     static let allEvents: [Event] = [
+        
         Event(
-            id: "pi_day_2025",
+            id: "pi_day_2026",
             name: "Pi Day Prodigy",
             description: "Celebrate the world's most famous mathematical constant! Complete a series of math-focused missions to earn exclusive rewards.",
             bannerImageName: "event_banner_pi_day",
-            startDate: date(year: 2025, month: 3, day: 14),
-            endDate: date(year: 2025, month: 3, day: 15),
+            // --- FIX: Changed the year to 2026 to make it an upcoming event ---
+            startDate: date(year: 2026, month: 3, day: 14),
+            endDate: date(year: 2026, month: 3, day: 15),
             rewards: [
-                EventReward(name: "'Pi Day' Avatar", iconName: "avatar_pi_day"),
+                EventReward(name: "'Pi Day' Avatar", iconName: "EventAvatar_PiDay"),
                 EventReward(name: "314 Gold", iconName: "icon_gold_coin")
             ]
         ),
+        
         Event(
             id: "summer_study_2025",
             name: "Summer of Study",
@@ -51,8 +54,11 @@ struct EventCalendar {
             startDate: date(year: 2025, month: 6, day: 20),
             endDate: date(year: 2025, month: 8, day: 20),
             rewards: [
-                EventReward(name: "'Summer Scholar' Frame", iconName: "frame_summer_scholar"),
-                EventReward(name: "1000 Gold", iconName: "icon_gold_coin")
+                EventReward(name: "Summer Avatar 1", iconName: "Avatar_feminine_summer_scholar_1"),
+                EventReward(name: "Summer Avatar 2", iconName: "Avatar_feminine_summer_scholar_2"),
+                EventReward(name: "Summer Avatar 3", iconName: "Avatar_masculine_summer_scholar_1"),
+                EventReward(name: "Summer Avatar 4", iconName: "Avatar_masculine_summer_scholar_2"),
+                EventReward(name: "2000 Gold", iconName: "icon_gold_coin")
             ]
         ),
         Event(

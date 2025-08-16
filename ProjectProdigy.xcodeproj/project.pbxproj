@@ -19,6 +19,10 @@
 		6442BE092E14C39100A2B37D /* FamiliarDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BE072E14C39100A2B37D /* FamiliarDetailView.swift */; };
 		6442BE0E2E15FEAB00A2B37D /* BranchProgressDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BE0D2E15FEAB00A2B37D /* BranchProgressDetailView.swift */; };
 		6442BE0F2E15FEAB00A2B37D /* BranchProgressDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6442BE0D2E15FEAB00A2B37D /* BranchProgressDetailView.swift */; };
+		64AD5D762E501E2400EBB6C7 /* AvatarData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AD5D752E501E2400EBB6C7 /* AvatarData.swift */; };
+		64AD5D772E501E2400EBB6C7 /* AvatarData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AD5D752E501E2400EBB6C7 /* AvatarData.swift */; };
+		64AD5D792E501E3500EBB6C7 /* AvatarGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AD5D782E501E3500EBB6C7 /* AvatarGalleryView.swift */; };
+		64AD5D7A2E501E3500EBB6C7 /* AvatarGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AD5D782E501E3500EBB6C7 /* AvatarGalleryView.swift */; };
 		64E0BE422DF8F1FA009A67EC /* PlayerData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE412DF8F1E0009A67EC /* PlayerData.swift */; };
 		64E0BE432DF8F1FA009A67EC /* PlayerData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE412DF8F1E0009A67EC /* PlayerData.swift */; };
 		64E0BE4B2DFA1A69009A67EC /* KnowledgeTreeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE4A2DFA1A62009A67EC /* KnowledgeTreeData.swift */; };
@@ -116,6 +120,8 @@
 		6442BDE52E1322EB00A2B37D /* FamiliarSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamiliarSelectionView.swift; sourceTree = "<group>"; };
 		6442BE072E14C39100A2B37D /* FamiliarDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamiliarDetailView.swift; sourceTree = "<group>"; };
 		6442BE0D2E15FEAB00A2B37D /* BranchProgressDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchProgressDetailView.swift; sourceTree = "<group>"; };
+		64AD5D752E501E2400EBB6C7 /* AvatarData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarData.swift; sourceTree = "<group>"; };
+		64AD5D782E501E3500EBB6C7 /* AvatarGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarGalleryView.swift; sourceTree = "<group>"; };
 		64E0BE132DF8F195009A67EC /* ProjectProdigy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ProjectProdigy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64E0BE242DF8F195009A67EC /* ProjectProdigy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ProjectProdigy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64E0BE412DF8F1E0009A67EC /* PlayerData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerData.swift; sourceTree = "<group>"; };
@@ -255,6 +261,7 @@
 		64E0BE402DF8F1D3009A67EC /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				64AD5D752E501E2400EBB6C7 /* AvatarData.swift */,
 				64E0BEE02E0371B1009A67EC /* StoryData.swift */,
 				64E0BEB62DFA3252009A67EC /* GuildData.swift */,
 				64E0BEAD2DFA2FEC009A67EC /* GachaData.swift */,
@@ -294,6 +301,7 @@
 		64E0BE462DF907EB009A67EC /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				64AD5D782E501E3500EBB6C7 /* AvatarGalleryView.swift */,
 				6442BE0D2E15FEAB00A2B37D /* BranchProgressDetailView.swift */,
 				6442BE072E14C39100A2B37D /* FamiliarDetailView.swift */,
 				6442BDE52E1322EB00A2B37D /* FamiliarSelectionView.swift */,
@@ -439,6 +447,7 @@
 			files = (
 				64E0BE5D2DFA1BD3009A67EC /* MissionData.swift in Sources */,
 				64E0BE9D2DFA2840009A67EC /* DungeonsViewModel.swift in Sources */,
+				64AD5D7A2E501E3500EBB6C7 /* AvatarGalleryView.swift in Sources */,
 				6442BD642E0755FA00A2B37D /* MissionReviewView.swift in Sources */,
 				64E0BE622DFA1CB5009A67EC /* MissionsView.swift in Sources */,
 				64E0BEBD2DFA32F9009A67EC /* GuildView.swift in Sources */,
@@ -457,6 +466,7 @@
 				64E0BE662DFA1D18009A67EC /* StoreData.swift in Sources */,
 				64E0BE552DFA1BAE009A67EC /* CharacterCreationView.swift in Sources */,
 				6442BDE72E1322EB00A2B37D /* FamiliarSelectionView.swift in Sources */,
+				64AD5D772E501E2400EBB6C7 /* AvatarData.swift in Sources */,
 				64E0BE9A2DFA27EF009A67EC /* DungeonData.swift in Sources */,
 				64E0BE682DFA1DB7009A67EC /* StoreViewModel.swift in Sources */,
 				64E0BE962DFA2787009A67EC /* EventsView.swift in Sources */,
@@ -496,6 +506,7 @@
 			files = (
 				64E0BE5C2DFA1BD3009A67EC /* MissionData.swift in Sources */,
 				64E0BE9C2DFA2840009A67EC /* DungeonsViewModel.swift in Sources */,
+				64AD5D792E501E3500EBB6C7 /* AvatarGalleryView.swift in Sources */,
 				6442BD652E0755FA00A2B37D /* MissionReviewView.swift in Sources */,
 				64E0BE632DFA1CB5009A67EC /* MissionsView.swift in Sources */,
 				64E0BEBE2DFA32F9009A67EC /* GuildView.swift in Sources */,
@@ -514,6 +525,7 @@
 				64E0BE652DFA1D18009A67EC /* StoreData.swift in Sources */,
 				64E0BE562DFA1BAE009A67EC /* CharacterCreationView.swift in Sources */,
 				6442BDE62E1322EB00A2B37D /* FamiliarSelectionView.swift in Sources */,
+				64AD5D762E501E2400EBB6C7 /* AvatarData.swift in Sources */,
 				64E0BE992DFA27EF009A67EC /* DungeonData.swift in Sources */,
 				64E0BE692DFA1DB7009A67EC /* StoreViewModel.swift in Sources */,
 				64E0BE972DFA2787009A67EC /* EventsView.swift in Sources */,
@@ -620,6 +632,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 69L86FLDV3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (

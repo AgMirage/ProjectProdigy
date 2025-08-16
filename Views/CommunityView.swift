@@ -32,7 +32,8 @@ struct CommunityView: View {
                     // Link to Events
                     NavigationLink(destination: EventsView()) {
                         HStack(spacing: 15) {
-                            Image(systemName: "calendar.badge.star")
+                            // --- FIX: Changed icon name to a valid SF Symbol ---
+                            Image(systemName: "calendar")
                                 .font(.title)
                                 .foregroundColor(.white)
                                 .frame(width: 50, height: 50)

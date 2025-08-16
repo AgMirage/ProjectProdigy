@@ -6,7 +6,6 @@ struct SettingsView: View {
     @EnvironmentObject var mainViewModel: MainViewModel
     @EnvironmentObject var missionsViewModel: MissionsViewModel
 
-    // --- EDITED: Renamed state variable for clarity ---
     @State private var isShowingTimerSettings = false
 
     var body: some View {
@@ -30,9 +29,14 @@ struct SettingsView: View {
                 .onChange(of: viewModel.selectedTheme) {
                     viewModel.applyThemeChange()
                 }
+                
+                // --- ADD THIS NAVIGATION LINK ---
+                NavigationLink(destination: AvatarGalleryView()) {
+                    Label("Avatar Gallery", systemImage: "person.crop.rectangle.stack")
+                }
+                // ---------------------------------
             }
             
-            // --- EDITED: Updated section to reflect new purpose ---
             Section(header: Text("Automation & Timers")) {
                 Button("Mission & Timer Settings") {
                     isShowingTimerSettings = true
@@ -68,7 +72,6 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .sheet(isPresented: $isShowingTimerSettings) {
-            // --- EDITED: Present the renamed view ---
             TimerSettingsView(settings: $missionsViewModel.dailyMissionSettings)
         }
         .alert("Are you absolutely sure?", isPresented: $viewModel.isShowingResetAlert) {

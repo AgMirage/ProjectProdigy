@@ -5,6 +5,7 @@ enum StoreItemCategory: String, Codable, CaseIterable {
     case consumables = "Consumables"
     case themes = "Themes"
     case avatars = "Avatars"
+    case wallpapers = "Wallpapers"
     case rare = "Rare Items"
     case fountain = "Fountain"
 }
@@ -14,7 +15,6 @@ enum ConsumableEffect: String, Codable {
     case noStudyingDayTicket
     case goldBooster25
     case rerollMissionTicket
-    // .statRespecPotion has been removed.
 }
 
 /// Represents a single item available for purchase in the Store.
@@ -52,7 +52,8 @@ struct StoreInventory {
                   description: "Preserves your Check-in Streak for one day without completing a mission. A life-saver!",
                   price: 250,
                   category: .consumables,
-                  iconName: "item_ticket",
+                  // --- FIX: Corrected iconName ---
+                  iconName: "item_NoStudyDay_ticket",
                   effect: .noStudyingDayTicket),
         
         StoreItem(name: "Gold Booster (25%)",
@@ -69,8 +70,68 @@ struct StoreInventory {
                   iconName: "item_reroll_ticket",
                   effect: .rerollMissionTicket),
         
+        // --- AVATARS ---
+        StoreItem(name: "Academic Scroll Avatar",
+                  description: "A studious-looking avatar with a warm glow.",
+                  price: 1500,
+                  category: .avatars,
+                  iconName: "Avatar_feminine_academic_scroll_warmglow_lightskin"),
+        
+        StoreItem(name: "Formal Book Avatar",
+                  description: "A formally dressed avatar with a blue light.",
+                  price: 1500,
+                  category: .avatars,
+                  iconName: "Avatar_feminine_formal_book_bluelight_lightskin"),
+        
+        StoreItem(name: "Classic Scholar Owl Avatar",
+                  description: "A classic scholar with a wise owl companion.",
+                  price: 2000,
+                  category: .avatars,
+                  iconName: "Avatar_masculine_classic_scholar_owl_lightskin"),
+        
+        StoreItem(name: "Glasses Scholar Globe Avatar",
+                  description: "A scholar with glasses and a holographic globe.",
+                  price: 2000,
+                  category: .avatars,
+                  iconName: "Avatar_feminine_glasses_scholar_darkskin_globe"),
+        
+        StoreItem(name: "Formal Glasses Library Avatar",
+                  description: "A formal avatar in a grand library setting.",
+                  price: 2000,
+                  category: .avatars,
+                  iconName: "Avatar_masculine_glasses_formal_darkskin_library"),
+                  
+        // --- WALLPAPERS ---
+        StoreItem(name: "Cafe Wallpaper",
+                  description: "A cozy cafe scene to set a relaxing mood.",
+                  price: 3000,
+                  category: .wallpapers,
+                  iconName: "wallpaper_cafe"),
+
+        StoreItem(name: "Greenhouse Wallpaper",
+                  description: "A lush greenhouse to bring nature to your studies.",
+                  price: 3000,
+                  category: .wallpapers,
+                  iconName: "wallpaper_greenhouse"),
+
+        StoreItem(name: "Architect Wallpaper",
+                  description: "An inspiring view for the builders of tomorrow.",
+                  price: 3500,
+                  category: .wallpapers,
+                  iconName: "wallpaper_architect"),
+        
+        StoreItem(name: "Data Wallpaper",
+                  description: "A wallpaper for the data-driven prodigy.",
+                  price: 4000,
+                  category: .wallpapers,
+                  iconName: "wallpaper_data"),
+                  
+        StoreItem(name: "Hands Wallpaper",
+                  description: "A wallpaper celebrating collaboration and creation.",
+                  price: 4000,
+                  category: .wallpapers,
+                  iconName: "wallpaper_hands"),
+
         // --- RARE ITEMS ---
-        // The Stat Respec Potion has been deleted from this list.
-        // You could add other rare, non-consumable items here in the future.
     ]
 }

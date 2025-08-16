@@ -79,7 +79,7 @@ struct Stats: Codable {
 
 
 // MARK: - Player
-struct Player {
+struct Player: Codable {
     let id: UUID
     var username: String
     
@@ -112,6 +112,9 @@ struct Player {
 
     // --- NEW: Stores the topic the player wants to focus on. ---
     var focusedTopicID: UUID?
+
+    // --- FIX: Added fountainTokens property ---
+    var fountainTokens: Int
 
     /// Calculates the number of completed missions from the archive.
     var completedMissionsCount: Int {
@@ -148,7 +151,7 @@ struct Player {
         self.dungeonProgress = [:]
         self.archivedMissions = []
         self.permanentXpBoosts = [:]
-        self.focusedTopicID = nil // Initialize the new property
+        self.focusedTopicID = nil
         
         self.academicTier = .foundationalApprentice
         self.stats = .default
@@ -156,5 +159,8 @@ struct Player {
         self.gold = 50
         self.checkInStreak = 0
         self.lastMissionCompletionDate = nil
+
+        // --- FIX: Initialize fountainTokens ---
+        self.fountainTokens = 5
     }
 }
