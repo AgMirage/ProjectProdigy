@@ -48,6 +48,7 @@ class StoreViewModel: ObservableObject {
         // 4. Apply the item's effect.
         if let effect = item.effect {
             // The .statRespecPotion case has been removed from the switch.
+            // --- FIX: Added .procrastinationRepellent case ---
             switch effect {
             case .noStudyingDayTicket:
                 print("Player bought a No-Study Day Ticket.")
@@ -58,6 +59,9 @@ class StoreViewModel: ObservableObject {
             case .rerollMissionTicket:
                 print("Player bought a Reroll Mission Ticket.")
                 // In a real app: player.inventory.rerollTickets += 1
+            case .procrastinationRepellent:
+                print("Player bought a Procrastination Repellent.")
+                // In a real app: player.activateProcrastinationRepellent()
             }
         }
         

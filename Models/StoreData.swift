@@ -15,6 +15,8 @@ enum ConsumableEffect: String, Codable {
     case noStudyingDayTicket
     case goldBooster25
     case rerollMissionTicket
+    // --- NEW ---
+    case procrastinationRepellent
 }
 
 /// Represents a single item available for purchase in the Store.
@@ -52,7 +54,6 @@ struct StoreInventory {
                   description: "Preserves your Check-in Streak for one day without completing a mission. A life-saver!",
                   price: 250,
                   category: .consumables,
-                  // --- FIX: Corrected iconName ---
                   iconName: "item_NoStudyDay_ticket",
                   effect: .noStudyingDayTicket),
         
@@ -70,6 +71,22 @@ struct StoreInventory {
                   iconName: "item_reroll_ticket",
                   effect: .rerollMissionTicket),
         
+        // --- NEW ---
+        StoreItem(name: "Procrastination Repellent",
+                  description: "Freezes the Procrastination Monster's progress for 24 hours.",
+                  price: 300,
+                  category: .consumables,
+                  iconName: "item_procrastination_repellent",
+                  effect: .procrastinationRepellent),
+        
+        // --- THEMES ---
+        StoreItem(name: "Arcane Library Theme",
+                  description: "A theme with warm wood textures, glowing runes, and a serif font.",
+                  price: 5000,
+                  category: .themes,
+                  iconName: "theme_arcane_library"),
+        // --- END NEW ---
+
         // --- AVATARS ---
         StoreItem(name: "Academic Scroll Avatar",
                   description: "A studious-looking avatar with a warm glow.",

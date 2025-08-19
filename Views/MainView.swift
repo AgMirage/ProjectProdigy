@@ -242,7 +242,14 @@ struct FocusFamiliarView: View {
                 .padding(.trailing, -5)
             }
             Image(familiarImageName).resizable().scaledToFit().frame(height: 60)
-            Text("Lvl: \(familiar.level)").font(.caption)
+            HStack {
+                Text("Lvl: \(familiar.level)")
+                Spacer()
+                Image(systemName: "heart.fill")
+                    .foregroundColor(.red)
+                Text("\(Int(familiar.happiness * 100))%")
+            }
+            .font(.caption)
         }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
     }
 }

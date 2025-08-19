@@ -8,7 +8,7 @@ enum MissionStatus: String, Codable, CaseIterable {
 
 /// Tracks where a mission was generated. Crucial for filtering.
 enum MissionSource: String, Codable {
-    case manual, automatic, guild, dungeon
+    case manual, automatic, guild, dungeon, familiar
 }
 
 /// Represents the calculated difficulty of a mission.
@@ -40,12 +40,13 @@ enum StudyType: String, Codable, CaseIterable {
     case memorizing
     // Special Event
     case majorEvent
+    case familiarInteraction
 
     var displayString: String { self.rawValue.fromCamelCaseToSpacedTitle() }
 
     var categories: [SubjectCategory] {
         switch self {
-        case .reading, .doingHomework, .listeningToLecture, .reviewingNotes, .watchingVideo, .doingSpeech, .researching, .majorEvent:
+        case .reading, .doingHomework, .listeningToLecture, .reviewingNotes, .watchingVideo, .doingSpeech, .researching, .majorEvent, .familiarInteraction:
             return [.stem, .humanities, .language, .socialScience]
         case .solvingProblemSet, .codingPractice, .derivations, .labSimulation, .designingExperiment, .memorizing:
             return [.stem]
@@ -70,6 +71,7 @@ enum StudyType: String, Codable, CaseIterable {
         case .speakingPractice: return "mouth.fill"
         case .memorizing: return "brain.fill"
         case .majorEvent: return "crown.fill"
+        case .familiarInteraction: return "pawprint.fill"
         }
     }
 }
@@ -113,7 +115,6 @@ class Mission: ObservableObject, Identifiable, Codable, Hashable {
     @Published var pomodoroBreakDuration: TimeInterval?
     @Published var actualTimeSpent: TimeInterval?
     
-    // --- NEW: Property to store the completion date ---
     @Published var completionDate: Date?
 
 

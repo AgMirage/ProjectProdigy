@@ -50,6 +50,7 @@ struct Familiar: Codable, Hashable {
     var imageNamePrefix: String
     var level: Int
     var xp: Double
+    var happiness: Double = 0.5 // 0.0 to 1.0
     
     init(id: UUID = UUID(), name: String, imageNamePrefix: String, level: Int = 1, xp: Double = 0.0) {
         self.id = id
@@ -109,14 +110,12 @@ struct Player: Codable {
     
     var archivedMissions: [Mission]
     var permanentXpBoosts: [String: Double]
+    var studyEfficiencyBonus: Double = 0.0
 
-    // --- NEW: Stores the topic the player wants to focus on. ---
     var focusedTopicID: UUID?
 
-    // --- FIX: Added fountainTokens property ---
     var fountainTokens: Int
 
-    /// Calculates the number of completed missions from the archive.
     var completedMissionsCount: Int {
         archivedMissions.filter { $0.status == .completed }.count
     }
@@ -159,8 +158,7 @@ struct Player: Codable {
         self.gold = 50
         self.checkInStreak = 0
         self.lastMissionCompletionDate = nil
-
-        // --- FIX: Initialize fountainTokens ---
+        
         self.fountainTokens = 5
     }
 }

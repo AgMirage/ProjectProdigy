@@ -23,6 +23,8 @@
 		64AD5D772E501E2400EBB6C7 /* AvatarData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AD5D752E501E2400EBB6C7 /* AvatarData.swift */; };
 		64AD5D792E501E3500EBB6C7 /* AvatarGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AD5D782E501E3500EBB6C7 /* AvatarGalleryView.swift */; };
 		64AD5D7A2E501E3500EBB6C7 /* AvatarGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AD5D782E501E3500EBB6C7 /* AvatarGalleryView.swift */; };
+		64BF0AA42E55056C00647259 /* FamiliarMissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64BF0AA32E55056C00647259 /* FamiliarMissionManager.swift */; };
+		64BF0AA52E55056C00647259 /* FamiliarMissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64BF0AA32E55056C00647259 /* FamiliarMissionManager.swift */; };
 		64E0BE422DF8F1FA009A67EC /* PlayerData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE412DF8F1E0009A67EC /* PlayerData.swift */; };
 		64E0BE432DF8F1FA009A67EC /* PlayerData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE412DF8F1E0009A67EC /* PlayerData.swift */; };
 		64E0BE4B2DFA1A69009A67EC /* KnowledgeTreeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E0BE4A2DFA1A62009A67EC /* KnowledgeTreeData.swift */; };
@@ -122,6 +124,7 @@
 		6442BE0D2E15FEAB00A2B37D /* BranchProgressDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchProgressDetailView.swift; sourceTree = "<group>"; };
 		64AD5D752E501E2400EBB6C7 /* AvatarData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarData.swift; sourceTree = "<group>"; };
 		64AD5D782E501E3500EBB6C7 /* AvatarGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarGalleryView.swift; sourceTree = "<group>"; };
+		64BF0AA32E55056C00647259 /* FamiliarMissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamiliarMissionManager.swift; sourceTree = "<group>"; };
 		64E0BE132DF8F195009A67EC /* ProjectProdigy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ProjectProdigy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64E0BE242DF8F195009A67EC /* ProjectProdigy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ProjectProdigy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64E0BE412DF8F1E0009A67EC /* PlayerData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerData.swift; sourceTree = "<group>"; };
@@ -331,6 +334,7 @@
 		64E0BE762DFA2111009A67EC /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				64BF0AA32E55056C00647259 /* FamiliarMissionManager.swift */,
 				64E0BE8F2DFA2748009A67EC /* EventManager.swift */,
 				64E0BE832DFA22D0009A67EC /* DailyMissionManager.swift */,
 				64E0BE772DFA211C009A67EC /* AchievementManager.swift */,
@@ -487,6 +491,7 @@
 				64E0BEBB2DFA327B009A67EC /* GuildViewModel.swift in Sources */,
 				64E0BE5F2DFA1C0A009A67EC /* MissionsViewModel.swift in Sources */,
 				64E0BE4B2DFA1A69009A67EC /* KnowledgeTreeData.swift in Sources */,
+				64BF0AA52E55056C00647259 /* FamiliarMissionManager.swift in Sources */,
 				64E0BE8B2DFA22FD009A67EC /* AutomaticMissionsSettingsView.swift in Sources */,
 				64E0BE592DFA1BB6009A67EC /* KnowledgeTreeView.swift in Sources */,
 				64E0BE4F2DFA1B9F009A67EC /* MainViewModel.swift in Sources */,
@@ -546,6 +551,7 @@
 				64E0BEBA2DFA327B009A67EC /* GuildViewModel.swift in Sources */,
 				64E0BE602DFA1C0A009A67EC /* MissionsViewModel.swift in Sources */,
 				64E0BE4C2DFA1A69009A67EC /* KnowledgeTreeData.swift in Sources */,
+				64BF0AA42E55056C00647259 /* FamiliarMissionManager.swift in Sources */,
 				64E0BE8A2DFA22FD009A67EC /* AutomaticMissionsSettingsView.swift in Sources */,
 				64E0BE5A2DFA1BB6009A67EC /* KnowledgeTreeView.swift in Sources */,
 				64E0BE502DFA1B9F009A67EC /* MainViewModel.swift in Sources */,

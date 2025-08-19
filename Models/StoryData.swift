@@ -36,6 +36,18 @@ struct PlayerStoryProgress: Codable, Hashable {
 /// A static "factory" that defines all stories available in the game.
 struct StoryList {
     static let allStories: [Story] = [
+        // --- NEW STORY ---
+        Story(
+            id: "prodigy_origin",
+            title: "The Prodigy's Origin",
+            description: "Discover the source of your unique abilities and the system that guides you.",
+            bannerImageName: "story_banner_origin",
+            sections: [
+                StorySection(sectionNumber: 1, title: "The Anomaly", content: "It started subtly. A flicker in your vision, a sense of clarity you'd never known. You begin to realize you're not just studying... you're evolving.", goldCost: 0),
+                StorySection(sectionNumber: 2, title: "First Contact", content: "A message appears in your mind, not in words, but in pure data. A mysterious benefactor offers you a choice: embrace your potential or return to a normal life.", goldCost: 50),
+            ]
+        ),
+        // --- END NEW STORY ---
         Story(
             id: "alchemist_manuscript",
             title: "The Alchemist's Manuscript",
@@ -60,10 +72,4 @@ struct StoryList {
             ]
         )
     ]
-}//
-//  StoryData.swift
-//  ProjectProdigy
-//
-//  Created by Kaia Quinn on 6/18/25.
-//
-
+}

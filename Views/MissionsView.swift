@@ -588,12 +588,14 @@ struct CalendarDayCell: View {
         calendar.startOfDay(for: day) < calendar.startOfDay(for: Date())
     }
 
+    // --- FIX: Added .familiar case ---
     private func colorForMission(_ mission: Mission) -> Color {
         switch mission.source {
         case .manual:    return .blue.opacity(0.2)
         case .automatic: return .purple.opacity(0.2)
         case .guild:     return .green.opacity(0.2)
         case .dungeon:   return .orange.opacity(0.2)
+        case .familiar:  return .brown.opacity(0.2) // Or any color you choose
         }
     }
     
@@ -734,11 +736,13 @@ struct CalendarDayCell: View {
 
 fileprivate extension MissionSource {
     var color: Color {
+        // --- FIX: Added .familiar case ---
         switch self {
         case .manual:    return .blue
         case .automatic: return .purple
         case .guild:     return .green
         case .dungeon:   return .orange
+        case .familiar:  return .brown // Or any color you choose
         }
     }
 }

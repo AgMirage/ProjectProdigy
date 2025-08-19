@@ -4,7 +4,7 @@ import SwiftUI
 /// Defines the rarity and visual style of an achievement.
 enum AchievementTier: String, Codable, CaseIterable {
     case Bronze, Silver, Gold, Onyx, Sapphire, Diamond
-    
+
     var imageName: String {
         switch self {
         case .Bronze: return "tier_bronze"
@@ -15,7 +15,7 @@ enum AchievementTier: String, Codable, CaseIterable {
         case .Diamond: return "tier_diamond"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .Bronze: return Color(red: 0.8, green: 0.5, blue: 0.2)
@@ -81,6 +81,12 @@ struct AchievementList {
         Achievement(id: "reach_level_10", name: "Emergent Expert", description: "Reach Character Level 10 (Emergent Expert).", tier: .Gold, goldReward: 1000, goal: 10, isSecret: false, titleRewardID: "emergent_expert"),
         Achievement(id: "master_college_branch", name: "Major Milestone", description: "Fully complete all topics in a college-level main branch.", tier: .Gold, goldReward: 1500, goal: 1, isSecret: false),
         
+        // --- NEW ACHIEVEMENTS ---
+        Achievement(id: "reach_level_50", name: "Seasoned Scholar", description: "Reach Character Level 50.", tier: .Onyx, goldReward: 1000, goal: 50, isSecret: false, titleRewardID: "seasoned_scholar"),
+        Achievement(id: "master_any_branch", name: "Branching Out", description: "Complete every node in a single knowledge tree.", tier: .Diamond, goldReward: 0, goal: 1, isSecret: false),
+        Achievement(id: "earn_50000_gold", name: "Gold Hoarder", description: "Have 50,000 gold at one time.", tier: .Sapphire, goldReward: 0, goal: 50000, isSecret: false),
+        // --- END NEW ACHIEVEMENTS ---
+
         // --- ONYX TIER ---
         Achievement(id: "missions_completed_500", name: "Dedicated Scholar", description: "Complete a total of 500 missions.", tier: .Onyx, goldReward: 5000, goal: 500, isSecret: false),
 
