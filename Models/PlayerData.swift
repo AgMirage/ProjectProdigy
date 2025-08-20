@@ -96,6 +96,9 @@ struct Player: Codable {
     var unlockedWallpapers: [String] = []
     var activeWallpaper: String?
 
+    // Settings
+    var areVideosMuted: Bool = true // Add this line
+
     // State & Progression
     var procrastinationMonsterValue: Double = 0.0
     var academicTier: AcademicTier

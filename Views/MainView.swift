@@ -46,7 +46,6 @@ struct MainView: View {
         .environmentObject(missionsViewModel)
         .environmentObject(knowledgeTreeViewModel)
         .onAppear {
-            // --- EDITED: Corrected the initializer call ---
             knowledgeTreeViewModel.reinitialize(with: viewModel)
             viewModel.knowledgeTreeViewModel = knowledgeTreeViewModel
         }
@@ -122,7 +121,7 @@ struct MainDashboardView: View {
     
     private var dashboardContent: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 15) {
                 PlayerHeaderView(
                     player: viewModel.player,
                     onAvatarTap: { viewModel.isShowingAvatarSelection = true },
@@ -131,9 +130,7 @@ struct MainDashboardView: View {
                 
                 StatsGridView(stats: viewModel.player.stats)
                 
-                HStack(alignment: .bottom, spacing: 15) {
-                    StreakView(streak: viewModel.player.checkInStreak)
-                    
+                HStack(alignment: .top, spacing: 15) {
                     NavigationLink(destination: FamiliarDetailView(familiar: viewModel.player.activeFamiliar)) {
                         FocusFamiliarView(
                             familiar: viewModel.player.activeFamiliar,
@@ -142,8 +139,9 @@ struct MainDashboardView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    ProcrastinationMonsterView()
+                    ProcrastiPuffView()
                 }
+                .frame(height: 220)
                 
                 SystemLogView(logEntries: viewModel.systemLog)
                 
@@ -186,7 +184,7 @@ struct PlayerHeaderView: View {
     @EnvironmentObject var mainViewModel: MainViewModel
     
     var body: some View {
-        HStack {
+        HStack(alignment: .top) {
             Button(action: onAvatarTap) {
                 Image(player.currentAvatar.imageName)
                     .resizable().scaledToFit().frame(width: 60, height: 60)
@@ -215,11 +213,23 @@ struct PlayerHeaderView: View {
             }.buttonStyle(.plain)
             
             Spacer()
-            HStack {
-                Image("icon_gold_coin").resizable().scaledToFit().frame(width: 25, height: 25)
-                Text("\(player.gold)").font(.title3).bold()
+            
+            VStack(alignment: .trailing, spacing: 8) {
+                HStack {
+                    Image("icon_gold_coin").resizable().scaledToFit().frame(width: 25, height: 25)
+                    Text("\(player.gold)").font(.title3).bold()
+                }
+                
+                HStack {
+                    Image(systemName: "flame.fill").foregroundColor(.orange)
+                    Text("\(player.checkInStreak) Day Streak")
+                        .font(.subheadline).bold()
+                }
             }
-        }.padding().background(Color.secondaryBackground).cornerRadius(12)
+        }
+        .padding()
+        .background(Color.secondaryBackground)
+        .cornerRadius(12)
     }
 }
 
@@ -241,7 +251,12 @@ struct FocusFamiliarView: View {
                 .buttonStyle(.borderless)
                 .padding(.trailing, -5)
             }
-            Image(familiarImageName).resizable().scaledToFit().frame(height: 60)
+            Spacer()
+            Image(familiarImageName)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 140)
+            Spacer()
             HStack {
                 Text("Lvl: \(familiar.level)")
                 Spacer()
@@ -250,22 +265,21 @@ struct FocusFamiliarView: View {
                 Text("\(Int(familiar.happiness * 100))%")
             }
             .font(.caption)
-        }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.secondaryBackground)
+        .cornerRadius(12)
     }
 }
 
-struct ProcrastinationMonsterView: View {
+struct ProcrastiPuffView: View {
     @EnvironmentObject var viewModel: MainViewModel
     
     var body: some View {
-        VStack {
-            Text("Procrastination")
+        VStack(spacing: 4) {
+            Text("Procrasti-Puff")
                 .font(.caption).bold()
-            
-            VideoPlayerView(videoName: viewModel.monsterMood.videoName)
-                .frame(height: 60)
-                .scaleEffect(viewModel.procrastinationMonsterScale)
-                .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
             
             if let effect = viewModel.monsterMood.statusEffectDescription {
                 Text(effect)
@@ -278,16 +292,25 @@ struct ProcrastinationMonsterView: View {
                     .foregroundColor(.secondary)
             }
             
+            VideoPlayerView(
+                videoName: viewModel.monsterMood.videoName,
+                isMuted: viewModel.player.areVideosMuted
+            )
+            .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit) // Restored aspect ratio
+            .scaleEffect(viewModel.procrastinationMonsterScale)
+            .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
+            
+            Spacer()
+            
             Button(action: { viewModel.petTheMonster() }) {
                 Text("Pat")
                     .font(.caption)
             }
             .buttonStyle(.bordered)
             .tint(.gray)
-            
         }
         .padding()
-        .frame(maxWidth: .infinity, minHeight: 120)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.secondaryBackground)
         .cornerRadius(12)
     }
@@ -312,16 +335,6 @@ struct StatBubble: View {
             Text(name).font(.headline)
             Text("\(value)").font(.title2).bold().frame(minWidth: 40, alignment: .leading)
         }.frame(maxWidth: .infinity)
-    }
-}
-
-struct StreakView: View {
-    let streak: Int
-    var body: some View {
-        VStack {
-            Image(systemName: "flame.fill").font(.system(size: 40)).foregroundColor(.orange)
-            Text("\(streak) Day Streak").font(.headline).bold()
-        }.padding().frame(maxWidth: .infinity).background(Color.secondaryBackground).cornerRadius(12)
     }
 }
 

@@ -6,15 +6,18 @@ struct WallpaperView: View {
     var body: some View {
         ZStack {
             if let wallpaper = mainViewModel.player.activeWallpaper {
-                VideoPlayerView(videoName: wallpaper)
-                    .ignoresSafeArea() // Correct way to make the view ignore safe areas
+                // Pass the mute setting from the player object
+                VideoPlayerView(
+                    videoName: wallpaper,
+                    isMuted: mainViewModel.player.areVideosMuted
+                )
+                .ignoresSafeArea()
             } else {
-                // Default background should also ignore the safe area
-                Color.black
-                    .ignoresSafeArea()
+                // Default background
+                Color.black.ignoresSafeArea()
             }
             
-            // Your other UI elements will go on top of the video background
+            // Your other UI elements go here
         }
     }
 }

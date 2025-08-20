@@ -15,7 +15,6 @@ enum ConsumableEffect: String, Codable {
     case noStudyingDayTicket
     case goldBooster25
     case rerollMissionTicket
-    // --- NEW ---
     case procrastinationRepellent
 }
 
@@ -28,9 +27,9 @@ struct StoreItem: Identifiable, Hashable {
     let category: StoreItemCategory
     let iconName: String
     let effect: ConsumableEffect?
-    let videoName: String? // Add this line
+    let videoName: String?
 
-    init(id: UUID = UUID(), name: String, description: String, price: Int, category: StoreItemCategory, iconName: String, effect: ConsumableEffect? = nil, videoName: String? = nil) { // Add videoName here
+    init(id: UUID = UUID(), name: String, description: String, price: Int, category: StoreItemCategory, iconName: String, effect: ConsumableEffect? = nil, videoName: String? = nil) {
         self.id = id
         self.name = name
         self.description = description
@@ -38,7 +37,7 @@ struct StoreItem: Identifiable, Hashable {
         self.category = category
         self.iconName = iconName
         self.effect = effect
-        self.videoName = videoName // And here
+        self.videoName = videoName
     }
     
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -73,9 +72,8 @@ struct StoreInventory {
                   iconName: "item_reroll_ticket",
                   effect: .rerollMissionTicket),
         
-        // --- NEW ---
         StoreItem(name: "Procrastination Repellent",
-                  description: "Freezes the Procrastination Monster's progress for 24 hours.",
+                  description: "Freezes the Procrasti-Puff's progress for 24 hours.",
                   price: 300,
                   category: .consumables,
                   iconName: "item_procrastination_repellent",
@@ -87,7 +85,6 @@ struct StoreInventory {
                   price: 5000,
                   category: .themes,
                   iconName: "theme_arcane_library"),
-        // --- END NEW ---
 
         // --- AVATARS ---
         StoreItem(name: "Academic Scroll Avatar",

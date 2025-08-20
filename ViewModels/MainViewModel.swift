@@ -112,13 +112,13 @@ class MainViewModel: ObservableObject {
     
     func petTheMonster() {
         guard player.procrastinationMonsterValue > 0 else {
-            addLogEntry("The Procrastination Monster is already content.", color: .gray)
+            addLogEntry("The Procrasti-Puff is already content.", color: .gray)
             return
         }
         
         let reduction = 0.5
         player.procrastinationMonsterValue = max(0, player.procrastinationMonsterValue - reduction)
-        addLogEntry("You pet the Procrastination Monster. It seems a little calmer.", color: .cyan)
+        addLogEntry("You pet the Procrasti-Puff. It seems a little calmer.", color: .cyan)
     }
 
     // MARK: - Mission Lifecycle Control
@@ -197,7 +197,6 @@ class MainViewModel: ObservableObject {
         
         self.missionToReview = completedMission
         
-        // --- FIX: Manually notify the KnowledgeTreeView that its data has changed ---
         knowledgeTreeViewModel?.objectWillChange.send()
     }
     

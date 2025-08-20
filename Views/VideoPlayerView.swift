@@ -1,17 +1,26 @@
 import SwiftUI
 import AVKit
 
-#if os(iOS) // Code for iOS (No changes here, this part was correct)
+#if os(iOS) // Code for iOS
 import UIKit
 
-// A custom UIView subclass that is backed by an AVPlayerLayer
 class PlayerUIView: UIView {
-    private var playerLayer: AVPlayerLayer {
+    var playerLayer: AVPlayerLayer {
         return layer as! AVPlayerLayer
     }
     
     override static var layerClass: AnyClass {
         return AVPlayerLayer.self
+    }
+    
+    // Set the background color to clear when the view is created
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        playerLayer.backgroundColor = UIColor.clear.cgColor
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
     
     var player: AVPlayer? {
@@ -25,9 +34,9 @@ class PlayerUIView: UIView {
     }
 }
 
-// The UIViewRepresentable that bridges our custom UIView into SwiftUI for iOS
 struct VideoPlayerView: UIViewRepresentable {
     var videoName: String
+    var isMuted: Bool
 
     func makeUIView(context: Context) -> UIView {
         let playerUIView = PlayerUIView(frame: .zero)
@@ -41,6 +50,7 @@ struct VideoPlayerView: UIViewRepresentable {
         
         if let url = tempURL {
             let player = AVPlayer(url: url)
+            player.isMuted = isMuted
             playerUIView.player = player
             playerUIView.videoGravity = .resizeAspectFill
             
@@ -53,7 +63,11 @@ struct VideoPlayerView: UIViewRepresentable {
         return playerUIView
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if let playerView = uiView as? PlayerUIView {
+            playerView.player?.isMuted = isMuted
+        }
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -84,18 +98,17 @@ struct VideoPlayerView: UIViewRepresentable {
     }
 }
 
-#elseif os(macOS) // ---- START OF CORRECTED MACOS CODE ----
+#elseif os(macOS) // Code for macOS
 import AppKit
 
-// A custom NSView subclass that is backed by an AVPlayerLayer
 class PlayerNSView: NSView {
     private var playerLayer = AVPlayerLayer()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        // Explicitly set this view to be layer-backed
         wantsLayer = true
-        // Set our custom playerLayer as the view's main layer
+        // Set the background color to clear
+        playerLayer.backgroundColor = NSColor.clear.cgColor
         layer = playerLayer
     }
 
@@ -113,17 +126,15 @@ class PlayerNSView: NSView {
         set { playerLayer.videoGravity = newValue }
     }
     
-    // The layout method is important on macOS to resize the layer with the view
     override func layout() {
         super.layout()
         playerLayer.frame = self.bounds
     }
 }
 
-
-// The NSViewRepresentable that bridges our custom NSView into SwiftUI for macOS
 struct VideoPlayerView: NSViewRepresentable {
     var videoName: String
+    var isMuted: Bool
 
     func makeNSView(context: Context) -> NSView {
         let playerNSView = PlayerNSView(frame: .zero)
@@ -137,6 +148,7 @@ struct VideoPlayerView: NSViewRepresentable {
         
         if let url = tempURL {
             let player = AVPlayer(url: url)
+            player.isMuted = isMuted
             playerNSView.player = player
             playerNSView.videoGravity = .resizeAspectFill
             
@@ -149,7 +161,11 @@ struct VideoPlayerView: NSViewRepresentable {
         return playerNSView
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let playerView = nsView as? PlayerNSView {
+            playerView.player?.isMuted = isMuted
+        }
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -179,9 +195,9 @@ struct VideoPlayerView: NSViewRepresentable {
         }
     }
 }
-#endif // ---- END OF CORRECTED MACOS CODE ----
+#endif
 
-// Helper function available to both platforms
+// Helper function
 fileprivate func createTemporaryURL(for data: Data) -> URL? {
     let fileManager = FileManager.default
     let cacheDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!

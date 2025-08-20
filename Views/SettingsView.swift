@@ -30,11 +30,9 @@ struct SettingsView: View {
                     viewModel.applyThemeChange()
                 }
                 
-                // --- ADD THIS NAVIGATION LINK ---
                 NavigationLink(destination: AvatarGalleryView()) {
                     Label("Avatar Gallery", systemImage: "person.crop.rectangle.stack")
                 }
-                // ---------------------------------
             }
             
             Section(header: Text("Automation & Timers")) {
@@ -44,6 +42,10 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Sound & Notifications")) {
+                // --- THIS IS THE NEWLY ADDED TOGGLE ---
+                Toggle("Mute Videos", isOn: $mainViewModel.player.areVideosMuted)
+                // -----------------------------------------
+                
                 Toggle("Enable Notifications", isOn: $viewModel.notificationsEnabled)
                 Toggle("Enable Sound Effects", isOn: $viewModel.soundEffectsEnabled)
                 
