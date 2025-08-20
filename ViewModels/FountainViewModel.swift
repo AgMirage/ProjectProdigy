@@ -87,7 +87,11 @@ class FountainViewModel: ObservableObject {
             
         case .gold:
             player.gold += reward.goldAmount ?? 0
-        // --- END UPDATED LOGIC ---
+        case .wallpaper:
+            player.unlockedWallpapers.append(reward.assetName)
+            if player.activeWallpaper == nil {
+                player.activeWallpaper = reward.assetName
+            }
         }
         
         mainViewModel?.player = player

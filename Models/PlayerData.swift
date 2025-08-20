@@ -93,6 +93,8 @@ struct Player: Codable {
     var activeFamiliar: Familiar
     var unlockedThemes: [String]
     var unlockedFamiliarSkins: [String: [String]]
+    var unlockedWallpapers: [String] = []
+    var activeWallpaper: String?
 
     // State & Progression
     var procrastinationMonsterValue: Double = 0.0

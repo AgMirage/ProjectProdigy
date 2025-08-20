@@ -28,8 +28,9 @@ struct StoreItem: Identifiable, Hashable {
     let category: StoreItemCategory
     let iconName: String
     let effect: ConsumableEffect?
-    
-    init(id: UUID = UUID(), name: String, description: String, price: Int, category: StoreItemCategory, iconName: String, effect: ConsumableEffect? = nil) {
+    let videoName: String? // Add this line
+
+    init(id: UUID = UUID(), name: String, description: String, price: Int, category: StoreItemCategory, iconName: String, effect: ConsumableEffect? = nil, videoName: String? = nil) { // Add videoName here
         self.id = id
         self.name = name
         self.description = description
@@ -37,6 +38,7 @@ struct StoreItem: Identifiable, Hashable {
         self.category = category
         self.iconName = iconName
         self.effect = effect
+        self.videoName = videoName // And here
     }
     
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -119,35 +121,12 @@ struct StoreInventory {
                   iconName: "Avatar_masculine_glasses_formal_darkskin_library"),
                   
         // --- WALLPAPERS ---
-        StoreItem(name: "Cafe Wallpaper",
-                  description: "A cozy cafe scene to set a relaxing mood.",
+        StoreItem(name: "Urban Loft",
+                  description: "A cozy urban loft to set a relaxing mood.",
                   price: 3000,
                   category: .wallpapers,
-                  iconName: "wallpaper_cafe"),
-
-        StoreItem(name: "Greenhouse Wallpaper",
-                  description: "A lush greenhouse to bring nature to your studies.",
-                  price: 3000,
-                  category: .wallpapers,
-                  iconName: "wallpaper_greenhouse"),
-
-        StoreItem(name: "Architect Wallpaper",
-                  description: "An inspiring view for the builders of tomorrow.",
-                  price: 3500,
-                  category: .wallpapers,
-                  iconName: "wallpaper_architect"),
-        
-        StoreItem(name: "Data Wallpaper",
-                  description: "A wallpaper for the data-driven prodigy.",
-                  price: 4000,
-                  category: .wallpapers,
-                  iconName: "wallpaper_data"),
-                  
-        StoreItem(name: "Hands Wallpaper",
-                  description: "A wallpaper celebrating collaboration and creation.",
-                  price: 4000,
-                  category: .wallpapers,
-                  iconName: "wallpaper_hands"),
+                  iconName: "wallpaper_cafe",
+                  videoName: "UrbanLoft"),
 
         // --- RARE ITEMS ---
     ]

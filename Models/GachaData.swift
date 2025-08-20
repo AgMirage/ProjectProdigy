@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The different categories of rewards available from the Fountain.
 enum GachaRewardType: String, Codable {
-    case avatar, theme, familiarSkin, gold
+    case avatar, theme, familiarSkin, gold, wallpaper
 }
 
 /// The rarity level of a gacha reward, which determines its color and drop chance.
@@ -93,7 +93,10 @@ struct GachaPool {
         GachaReward(name: "Cosmic Stargazer Avatar", type: .avatar, rarity: .epic, assetName: "Avatar_feminine_cosmic_stargazer_lightskin"),
         GachaReward(name: "Duality Split Energy Avatar", type: .avatar, rarity: .epic, assetName: "Avatar_masculine_duality_splitenergy_lightskin"),
         GachaReward(name: "Kinetic Power Avatar", type: .avatar, rarity: .epic, assetName: "Avatar_feminine_kinetic_power_darkskin"),
-        
+        GachaReward(name: "Bioluminescent Wallpaper", type: .wallpaper, rarity: .epic, assetName: "Bioluminescent"),
+        GachaReward(name: "Mind Palace Wallpaper", type: .wallpaper, rarity: .epic, assetName: "MindPalace"),
+        GachaReward(name: "Global Knowledge Wallpaper", type: .wallpaper, rarity: .epic, assetName: "GlobalKnowledge"),
+
         // --- LEGENDARY ---
         GachaReward(name: "Legendary Scholar Avatar", type: .avatar, rarity: .legendary, assetName: "avatar_legendary_scholar"),
         GachaReward(name: "Magma Codex Skin", type: .familiarSkin, rarity: .legendary, assetName: "skin_codex_magma", targetFamiliarName: "Codex"),

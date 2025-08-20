@@ -262,8 +262,8 @@ struct ProcrastinationMonsterView: View {
             Text("Procrastination")
                 .font(.caption).bold()
             
-            Image(viewModel.monsterMood.imageName)
-                .resizable().scaledToFit().frame(height: 60)
+            VideoPlayerView(videoName: viewModel.monsterMood.videoName)
+                .frame(height: 60)
                 .scaleEffect(viewModel.procrastinationMonsterScale)
                 .animation(.spring(response: 0.3, dampingFraction: 0.3), value: viewModel.procrastinationMonsterScale)
             

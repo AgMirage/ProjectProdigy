@@ -21,7 +21,7 @@ enum MonsterMood: String {
     case content, neutral, agitated, furious
     
     /// The image associated with each mood.
-    var imageName: String {
+    var videoName: String {
         switch self {
         case .content: return "monster_content"
         case .neutral: return "monster_neutral"
